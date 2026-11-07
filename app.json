@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "StepIn",
+    "slug": "stepin",
+    "version": "0.1.0",
+    "scheme": "stepin",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ca.stepin.mobile"
+    },
+    "android": {
+      "package": "ca.stepin.mobile",
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "StepIn — a little help getting started"
+    },
+    "plugins": ["expo-router", "expo-sqlite", "expo-status-bar", "expo-font"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

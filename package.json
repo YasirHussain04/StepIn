@@ -1,0 +1,41 @@
+{
+  "name": "stepin",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "node scripts/run.cjs expo start",
+    "android": "node scripts/run.cjs expo start --android",
+    "ios": "node scripts/run.cjs expo start --ios",
+    "web": "node scripts/run.cjs expo start --web",
+    "typecheck": "node scripts/run.cjs tsc --noEmit",
+    "test": "node scripts/run.cjs vitest run",
+    "export:web": "node scripts/run.cjs expo export --platform web",
+    "format": "prettier --write app components src tests scripts README.md VERIFICATION.md app.json package.json tsconfig.json"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "58.0.17",
+    "@expo/vector-icons": "15.1.1",
+    "expo": "58.0.23",
+    "expo-constants": "58.0.15",
+    "expo-font": "58.0.11",
+    "expo-linking": "58.0.16",
+    "expo-router": "58.0.30",
+    "expo-speech": "58.0.3",
+    "expo-sqlite": "58.0.15",
+    "expo-status-bar": "58.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "5.11.1",
+    "react-native-screens": "4.30.1",
+    "react-native-web": "0.21.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "node": "22.22.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  }
+}
