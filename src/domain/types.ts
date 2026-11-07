@@ -10,14 +10,17 @@ export type Profile = {
   scoringVersion: "1";
 };
 export type Audit = {
-  source: "fixture";
+  source: "fixture" | "live";
   decision: "approved" | "clarification";
   profileId: string;
   attempts: number;
   summary: string;
   checks: string[];
-  suggestionVersion: "fixture-1";
-  auditVersion: "rules-1";
+  suggestionVersion: string;
+  auditVersion: string;
+  models?: { conversation: string; audit: string };
+  personalized?: boolean;
+  checkedAt?: string;
 };
 export type Message = {
   id: string;
@@ -29,16 +32,20 @@ export type Message = {
   affirmation?: string;
   action?: "start" | "follow_up" | "another" | "simplify" | "encourage";
   persisted?: boolean;
+  requestId?: string;
+  requestProfileId?: string;
+  requestPolicy?: string;
 };
 export type Session = {
   id: string;
   title: string;
   room: string;
-  scenarioId?: string;
+  scenarioId?: "games" | "garden" | "welcome";
   createdAt: string;
   updatedAt: string;
   messages: Message[];
   persisted?: boolean;
+  mode?: "demo" | "live";
 };
 export type Settings = {
   history: boolean;
@@ -46,13 +53,35 @@ export type Settings = {
   rate: number;
   audio: boolean;
   interests: string;
+  apiUrl?: string;
+  mode?: "demo" | "live";
+  shareProfile?: boolean;
+  processingConsent?: boolean;
+  processingProvider?: "gemini";
+  voiceConsent?: boolean;
 };
+export function hasGeminiConsent(settings: Settings) {
+  return (
+    settings.processingConsent === true &&
+    settings.processingProvider === "gemini"
+  );
+}
 export type AppState = {
   profiles: Profile[];
   activeProfileId: string | null;
   draft: { answers: Answers; step: number } | null;
   sessions: Session[];
   settings: Settings;
+  ownerId?: string | null;
+  cloud?: {
+    enabled: boolean;
+    revision: number;
+    historyEpoch: number;
+    consented?: boolean;
+    queue: import("../../shared/contracts").SyncOperation[];
+    conflict?: import("../../shared/contracts").CloudSnapshot;
+  };
+  eventCache?: import("../../shared/contracts").EventsResponse;
 };
 export const INITIAL_STATE: AppState = {
   profiles: [],
@@ -65,6 +94,10 @@ export const INITIAL_STATE: AppState = {
     rate: 0.9,
     audio: true,
     interests: "",
+    mode: "demo",
+    shareProfile: true,
+    processingConsent: false,
+    voiceConsent: false,
   },
 };
 export function uid() {

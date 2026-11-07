@@ -19,6 +19,7 @@ import { Confirm } from "../../components/Confirm";
 import { useApp } from "../../src/state/AppProvider";
 import { createProfile, comfortLabel, preference } from "../../src/domain/quiz";
 import { Settings } from "../../src/domain/types";
+import { AccountCard } from "../../components/AccountCard";
 
 function Toggle({
   label,
@@ -47,7 +48,7 @@ function Toggle({
   );
 }
 export default function Preferences() {
-  const { state, setState, profile } = useApp();
+  const { state, setState, profile, deleteAllChats } = useApp();
   const [confirm, setConfirm] = useState<
     "history" | "profile" | "sensitive" | null
   >(null);
@@ -60,7 +61,7 @@ export default function Preferences() {
   }
   function remove() {
     void Speech.stop();
-    if (confirm === "history") setState((prev) => ({ ...prev, sessions: [] }));
+    if (confirm === "history") deleteAllChats();
     if (confirm === "profile")
       setState((prev) => ({
         ...prev,
@@ -113,6 +114,7 @@ export default function Preferences() {
         <Title>Made for you.{"\n"}Changed by you.</Title>
         <Body muted>Your preferences can change. StepIn can, too.</Body>
       </View>
+      <AccountCard />
       <Card style={{ backgroundColor: C.sage }}>
         <View style={s.between}>
           <View style={s.row}>
@@ -273,15 +275,19 @@ export default function Preferences() {
           />
           <View style={s.divider} />
           <Body style={s.small}>
-            Profiles and saved chats stay in this app’s local database (browser
-            storage in the web preview). Storage is not encrypted by StepIn or
-            protected by an app lock. No StepIn account, cloud sync, analytics
-            or live AI calls are enabled.
+            Profiles and saved chats use the local database (browser storage in
+            the web preview). Account sync uploads them only after your
+            confirmation. History-off messages stay temporary and are excluded
+            from database sync. Chat storage is not encrypted by StepIn or
+            protected by an app lock. Account tokens use separate secure storage
+            on the phone.
           </Body>
           <Body style={s.small}>
-            Keyboard dictation and browser speech recognition may use their
-            provider’s online speech service. StepIn stores text only; it does
-            not record audio or capture images.
+            The in-app recorder keeps temporary audio on this device. Only your
+            explicit transcription action uploads it to StepIn and Google; the
+            server does not durably store the audio. Keyboard and browser
+            dictation use their own providers. No camera or image capture is
+            used.
           </Body>
           <Button
             secondary
@@ -311,10 +317,14 @@ export default function Preferences() {
       </Card>
       <View style={{ alignItems: "center", gap: 6 }}>
         <Text style={{ color: C.green, fontWeight: "700" }}>
-          StepIn · 0.1.0
+          StepIn · 0.2.0
         </Text>
         <Body style={s.small}>A small step toward feeling at home.</Body>
-        <Badge>LOCAL DEMO · NO LIVE AGENTS OR SYNC</Badge>
+        <Badge>
+          {state.settings.mode === "live"
+            ? "LIVE GUIDANCE · ACCOUNT SYNC"
+            : "OFFLINE DEMO AVAILABLE"}
+        </Badge>
       </View>
       <Confirm
         visible={!!confirm}
@@ -327,7 +337,7 @@ export default function Preferences() {
         }
         description={
           confirm === "history"
-            ? "All saved and temporary chats, messages and check records will be removed from this device. This cannot be undone."
+            ? "All saved and temporary chats, messages and check records will be removed. With account sync enabled, deletion is also queued for the cloud and retries when online. This cannot be undone."
             : confirm === "sensitive"
               ? "Communication and accessibility answers in all profiles will become “Prefer not to say”. Draft answers to these questions will be cleared. A new active version will preserve your other preferences."
               : "All quiz drafts and profile versions will be removed. Chats remain with a “profile removed” marker. You will need to complete the quiz before new coaching or playback."

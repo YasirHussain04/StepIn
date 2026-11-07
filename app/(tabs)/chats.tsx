@@ -16,7 +16,7 @@ import {
 } from "../../components/ui";
 import { useApp } from "../../src/state/AppProvider";
 export default function Chats() {
-  const { state } = useApp();
+  const { state, syncStatus, syncError, flushSync } = useApp();
   const [query, setQuery] = useState("");
   const sessions = [...state.sessions]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -50,6 +50,28 @@ export default function Chats() {
         <Text style={s.section}>Your conversations</Text>
         <Text style={s.small}>{sessions.length} chats</Text>
       </View>
+      {state.cloud?.consented && (
+        <Card>
+          <Body>
+            {state.cloud.enabled ? syncStatus : "Account sync paused"} ·{" "}
+            {state.cloud.queue.length} queued changes
+          </Body>
+          {!!syncError && <Body muted>{syncError}</Body>}
+          {state.cloud.conflict ? (
+            <Button
+              title="Review sync conflict"
+              secondary
+              onPress={() => router.push("/settings")}
+            />
+          ) : state.cloud.enabled ? (
+            <Button
+              title="Sync chats now"
+              secondary
+              onPress={() => void flushSync().catch(() => {})}
+            />
+          ) : null}
+        </Card>
+      )}
       {!sessions.length && (
         <Card style={{ alignItems: "center", paddingVertical: 34 }}>
           <View
@@ -79,7 +101,11 @@ export default function Chats() {
         >
           <View style={s.between}>
             <Badge warm>
-              {session.persisted === false ? "NOT SAVED" : "DEMO PRACTICE"}
+              {session.persisted === false
+                ? "NOT SAVED"
+                : session.mode === "live"
+                  ? "LIVE GUIDANCE"
+                  : "DEMO PRACTICE"}
             </Badge>
             <Text style={s.small}>
               {new Date(session.updatedAt).toLocaleDateString("en-CA", {
@@ -100,7 +126,12 @@ export default function Chats() {
               "Ready when you are."}
           </Text>
           <Text style={s.small}>
-            {session.messages.length} messages · local only
+            {session.messages.length} messages ·{" "}
+            {session.persisted === false
+              ? "temporary"
+              : state.cloud?.consented
+                ? "account sync"
+                : "local only"}
           </Text>
         </Pressable>
       ))}
@@ -108,7 +139,9 @@ export default function Chats() {
         <Icon name="lock-closed-outline" size={15} />
         <Body style={[s.small, { flex: 1 }]}>
           {state.settings.history
-            ? "History stays on this device. Manage it in Settings."
+            ? state.cloud?.consented
+              ? "Saved chats participate in account sync. Manage sync and deletion in Settings."
+              : "History stays on this device until you enable account sync in Settings."
             : "History is off. New chats are temporary; existing saved chats remain until you delete them."}
         </Body>
       </View>

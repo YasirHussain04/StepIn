@@ -21,7 +21,11 @@ import { uid } from "../../src/domain/types";
 
 export default function Speak() {
   const { state, setState, profile } = useApp();
-  function start(room: string, scenarioId?: string, name?: string) {
+  function start(
+    room: string,
+    scenarioId?: "games" | "garden" | "welcome",
+    name?: string,
+  ) {
     if (!profile) {
       router.push("/quiz");
       return;
@@ -40,6 +44,7 @@ export default function Speak() {
           updatedAt: now,
           messages: [],
           persisted: prev.settings.history,
+          mode: prev.settings.mode ?? "demo",
         },
         ...prev.sessions,
       ],
@@ -51,7 +56,9 @@ export default function Speak() {
       <View style={{ gap: 12 }}>
         <View style={s.between}>
           <Label>A little help, a little courage</Label>
-          <Badge>OFFLINE DEMO</Badge>
+          <Badge>
+            {state.settings.mode === "live" ? "LIVE GUIDANCE" : "OFFLINE DEMO"}
+          </Badge>
         </View>
         <Title>Good things start{"\n"}with a hello.</Title>
         <Body muted>

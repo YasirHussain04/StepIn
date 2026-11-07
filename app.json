@@ -2,7 +2,7 @@
   "expo": {
     "name": "StepIn",
     "slug": "stepin",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "scheme": "stepin",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -12,17 +12,28 @@
     },
     "android": {
       "package": "ca.stepin.mobile",
-      "blockedPermissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ]
+      "blockedPermissions": ["android.permission.CAMERA"]
     },
     "web": {
       "bundler": "metro",
       "output": "single",
       "name": "StepIn — a little help getting started"
     },
-    "plugins": ["expo-router", "expo-sqlite", "expo-status-bar", "expo-font"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-status-bar",
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow StepIn to record a voice message only when you tap Record.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-secure-store"
+    ],
     "experiments": {
       "typedRoutes": true
     }

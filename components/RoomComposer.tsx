@@ -3,6 +3,8 @@ import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useVoiceInput } from "../src/services/useVoiceInput";
 import { Badge, Body, Button, C, Card, Icon, s, serif } from "./ui";
+import { VoiceRecorder } from "./VoiceRecorder";
+import { useApp } from "../src/state/AppProvider";
 
 export function RoomComposer({
   onSubmit,
@@ -13,6 +15,7 @@ export function RoomComposer({
 }) {
   const [text, setText] = useState("");
   const [voiceInfo, setVoiceInfo] = useState(false);
+  const { state } = useApp();
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
   const voice = useVoiceInput((t) =>
     setText((prev) => `${prev}${prev ? " " : ""}${t}`.slice(0, 2000)),
@@ -24,7 +27,7 @@ export function RoomComposer({
       return;
     }
     setVoiceInfo(true);
-    if (!voice.supported) input.current?.focus();
+    if (!voice.supported && Platform.OS === "web") input.current?.focus();
   }
   return (
     <Card style={{ alignItems: "center", paddingVertical: 25, gap: 16 }}>
@@ -36,7 +39,7 @@ export function RoomComposer({
             ? "Stop voice input"
             : voice.supported
               ? "Show voice input options"
-              : "Focus description for keyboard dictation"
+              : "Show in-app voice recorder"
         }
         disabled={disabled}
         onPress={activateVoice}
@@ -61,7 +64,7 @@ export function RoomComposer({
         <Body muted style={{ textAlign: "center", fontSize: 13 }}>
           {voice.supported
             ? "Speak or type. Review your words before sending."
-            : "Speak with your keyboard’s mic, or type below."}
+            : "Record your voice, use keyboard dictation, or type."}
         </Body>
       </View>
       {voiceInfo && (
@@ -79,7 +82,7 @@ export function RoomComposer({
               ? "Your browser’s speech service may process audio remotely. StepIn receives only the resulting text; no audio is saved by StepIn."
               : Platform.OS === "web"
                 ? "This browser does not offer speech recognition. Use your device keyboard’s dictation or type your description."
-                : "Tap the microphone on your iOS or Android keyboard to dictate here. Your keyboard provider handles speech processing. StepIn receives only your text."}
+                : "Use the in-app recorder below, or tap your keyboard’s microphone for dictation. You can review and edit text before sending."}
           </Body>
           {voice.supported && (
             <Button
@@ -89,6 +92,14 @@ export function RoomComposer({
             />
           )}
         </View>
+      )}
+      {voiceInfo && (
+        <VoiceRecorder
+          disabled={disabled}
+          onTranscript={(t) =>
+            setText((prev) => `${prev}${prev ? " " : ""}${t}`.slice(0, 2000))
+          }
+        />
       )}
       {!!voice.error && <Body style={{ color: C.danger }}>{voice.error}</Body>}
       <TextInput
@@ -116,7 +127,9 @@ export function RoomComposer({
           }}
         />
         <Body style={[s.small, { textAlign: "center" }]}>
-          Offline practice · new descriptions receive clarification
+          {state.settings.mode === "live"
+            ? "Live guidance · remote processing after your confirmation"
+            : "Offline practice · new descriptions receive clarification"}
         </Body>
       </View>
     </Card>

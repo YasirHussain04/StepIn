@@ -24,10 +24,12 @@ import {
 } from "../../components/ui";
 import { Confirm } from "../../components/Confirm";
 import { useApp } from "../../src/state/AppProvider";
-import { Message, uid } from "../../src/domain/types";
+import { Message, uid, hasGeminiConsent } from "../../src/domain/types";
 import { CoachAction, runFixture } from "../../src/services/coach";
 import { approvedSpokenText } from "../../src/services/playback";
 import { canSpeak } from "../../src/domain/quiz";
+import { api, liveCoach } from "../../src/services/api";
+import { VoiceRecorder } from "../../components/VoiceRecorder";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export default function Conversation() {
@@ -48,6 +50,19 @@ export default function Conversation() {
   const nonce = useRef(0);
   const busy = useRef(false);
   const focused = useRef(true);
+  const requestAbort = useRef<AbortController | null>(null);
+  const activeRequest = useRef<string | null>(null);
+  const [showVoice, setShowVoice] = useState(false);
+  function cancelLive() {
+    requestAbort.current?.abort();
+    const requestId = activeRequest.current;
+    if (requestId)
+      void api(`/api/coach/${requestId}/cancel`, {
+        method: "POST",
+        url: latest.current.getState().settings.apiUrl,
+      }).catch(() => {});
+    activeRequest.current = null;
+  }
   function stop() {
     void Speech.stop();
     setSpeaking(null);
@@ -57,6 +72,7 @@ export default function Conversation() {
       focused.current = true;
       const subscription = AppState.addEventListener("change", (value) => {
         if (value !== "active") {
+          cancelLive();
           void Speech.stop();
           setSpeaking(null);
           nonce.current++;
@@ -65,6 +81,7 @@ export default function Conversation() {
         }
       });
       return () => {
+        cancelLive();
         focused.current = false;
         nonce.current++;
         busy.current = false;
@@ -75,69 +92,169 @@ export default function Conversation() {
       };
     }, []),
   );
+  React.useEffect(() => {
+    cancelLive();
+    nonce.current++;
+    busy.current = false;
+    setPhase("");
+  }, [app.account?.user.id]);
   async function generate(action: CoachAction, text: string, retry = false) {
-    const store = latest.current;
-    const current = store.state.sessions.find((s) => s.id === id);
+    let store = latest.current;
+    let current = store.getState().sessions.find((s) => s.id === id);
     if (!store.profile) {
       router.push("/quiz");
       return;
     }
     if (!current || busy.current) return;
+    const live = current.mode === "live";
+    if (
+      live &&
+      (!store.account ||
+        !store.getState().cloud?.enabled ||
+        !hasGeminiConsent(store.getState().settings))
+    ) {
+      setError(
+        "Live guidance needs sign-in, enabled account sync, and remote-processing consent in Settings. You can explicitly switch this chat to the offline demo.",
+      );
+      return;
+    }
     busy.current = true;
     const token = ++nonce.current;
-    const profileId = store.profile.id;
     stop();
     setError("");
-    setMessage("");
-    if (!retry) {
-      const user: Message = {
-        id: uid(),
-        role: "user",
-        text,
-        action,
-        createdAt: new Date().toISOString(),
-        persisted: store.state.settings.history,
-      };
-      setState((prev) => ({
-        ...prev,
-        sessions: prev.sessions.map((s) =>
-          s.id === id
-            ? {
-                ...s,
-                messages: [...s.messages, user],
-                updatedAt: user.createdAt,
-              }
-            : s,
-        ),
-      }));
-    }
     try {
-      setPhase("Drafting a demo idea…");
-      await wait(450);
+      if (live) {
+        setPhase("Synchronizing your current profile…");
+        await store.flushSync();
+      }
       if (nonce.current !== token || !focused.current) return;
-      setPhase("Checking the fixture against your preferences…");
-      await wait(650);
+      const stateNow = store.getState();
+      current = stateNow.sessions.find((s) => s.id === id);
+      if (!current) throw new Error("This conversation was deleted.");
+      const active = stateNow.profiles.find(
+        (p) => p.id === stateNow.activeProfileId,
+      );
+      if (!active)
+        throw new Error("Complete and confirm your preferences first.");
+      const profileId = active.id;
+      const history = stateNow.settings.history && current.persisted !== false;
+      const policy = JSON.stringify({
+        provider: "gemini",
+        profileId,
+        history,
+        share: stateNow.settings.shareProfile !== false,
+        affirmations: stateNow.settings.affirmations,
+      });
+      const oldUser = retry
+        ? [...current.messages].reverse().find((m) => m.role === "user")
+        : undefined;
+      if (
+        retry &&
+        oldUser?.requestId &&
+        current.messages.some(
+          (m) => m.role === "assistant" && m.requestId === oldUser.requestId,
+        )
+      )
+        return;
+      const reuse =
+        live &&
+        oldUser?.requestProfileId === profileId &&
+        oldUser.requestPolicy === policy &&
+        !!oldUser.requestId;
+      const user: Message = reuse
+        ? oldUser!
+        : {
+            id: uid(),
+            role: "user",
+            text,
+            action,
+            createdAt: new Date().toISOString(),
+            persisted: history,
+            ...(live
+              ? {
+                  requestId: uid(),
+                  requestProfileId: profileId,
+                  requestPolicy: policy,
+                }
+              : {}),
+          };
+      if (!retry || (live && !reuse)) {
+        setState((prev) => ({
+          ...prev,
+          sessions: prev.sessions.map((s) =>
+            s.id === id
+              ? {
+                  ...s,
+                  messages: [...s.messages, user],
+                  updatedAt: user.createdAt,
+                }
+              : s,
+          ),
+        }));
+      }
+      setMessage("");
+      let response: Message;
+      if (live) {
+        await store.flushSync();
+        if (nonce.current !== token || !focused.current) return;
+        requestAbort.current = new AbortController();
+        activeRequest.current = user.requestId!;
+        setPhase("Drafting and independently checking your idea…");
+        const result = await liveCoach(
+          {
+            requestId: user.requestId!,
+            sessionId: id,
+            messageId: user.id,
+            message: text,
+            action,
+            expectedProfileVersionId: profileId,
+            history,
+            shareProfile: stateNow.settings.shareProfile !== false,
+            affirmations: stateNow.settings.affirmations,
+            processingConsent: true,
+            processingProvider: "gemini",
+            ...(history
+              ? {}
+              : {
+                  transientRoom: {
+                    description: current.room,
+                    scenarioId: current.scenarioId,
+                  },
+                }),
+          },
+          stateNow.settings.apiUrl,
+          requestAbort.current.signal,
+        );
+        response = result.message;
+      } else {
+        setPhase("Drafting a demo idea…");
+        await wait(450);
+        if (nonce.current !== token || !focused.current) return;
+        setPhase("Checking the fixture against your preferences…");
+        await wait(650);
+        response = runFixture(
+          active,
+          current.room,
+          current.scenarioId,
+          action,
+          current.messages.filter((m) => m.role === "assistant").length,
+          stateNow.settings.affirmations,
+          text,
+        );
+      }
       if (nonce.current !== token || !focused.current) return;
-      if (latest.current.profile?.id !== profileId)
+      if (store.getState().activeProfileId !== profileId)
         throw new Error(
           "Your preferences changed. Retry with your current profile.",
         );
-      if (!latest.current.state.sessions.some((s) => s.id === id))
+      if (!store.getState().sessions.some((s) => s.id === id))
         throw new Error("This conversation was deleted.");
-      const response = runFixture(
-        store.profile,
-        current.room,
-        current.scenarioId,
-        action,
-        current.messages.filter((m) => m.role === "assistant").length,
-        store.state.settings.affirmations,
-        text,
-      );
-      response.persisted =
-        store.state.settings.history && latest.current.state.settings.history;
-      setState((prev) => {
-        if (prev.activeProfileId !== profileId) return prev;
-        return {
+      response.persisted = history && store.getState().settings.history;
+      if (live) {
+        store.appendLiveMessage(id, response);
+        void store.flushSync().catch(() => {});
+      } else
+        setState((prev) => ({
           ...prev,
           sessions: prev.sessions.map((s) =>
             s.id === id
@@ -148,19 +265,20 @@ export default function Conversation() {
                 }
               : s,
           ),
-        };
-      });
+        }));
     } catch (e) {
-      if (focused.current)
+      if (focused.current && nonce.current === token)
         setError(
           e instanceof Error
             ? e.message
-            : "The demo could not finish. Your message is saved; try again.",
+            : "This turn could not finish. Your request is preserved; retry or choose the offline demo.",
         );
     } finally {
       if (nonce.current === token && focused.current) {
         busy.current = false;
         setPhase("");
+        activeRequest.current = null;
+        requestAbort.current = null;
       }
     }
   }
@@ -227,7 +345,11 @@ export default function Conversation() {
             <Body>Chats</Body>
           </View>
         </Pressable>
-        <Badge warm>OFFLINE DEMO · NO LIVE AI</Badge>
+        <Badge warm>
+          {session.mode === "live"
+            ? "LIVE GUIDANCE"
+            : "OFFLINE DEMO · NO LIVE AI"}
+        </Badge>
       </View>
       <View style={{ gap: 10 }}>
         <Label>Your practice space</Label>
@@ -287,8 +409,9 @@ export default function Conversation() {
         </View>
         <Body style={{ fontSize: 13 }}>{session.room}</Body>
         <Body style={s.small}>
-          This is scripted practice with local rule checks. No live model or
-          camera is involved.
+          {session.mode === "live"
+            ? "Your typed context is sent to the server. Only a response that passes the independent check is released. No camera is involved."
+            : "This is scripted practice with local rule checks. No live model or camera is involved."}
         </Body>
       </Card>
       {!profile && (
@@ -390,7 +513,10 @@ export default function Conversation() {
             </View>
             {inspect === m.id && m.audit && (
               <View style={{ gap: 9, paddingTop: 10 }}>
-                <Badge>{m.audit.decision.toUpperCase()} · FIXTURE</Badge>
+                <Badge>
+                  {m.audit.decision.toUpperCase()} ·{" "}
+                  {m.audit.source.toUpperCase()}
+                </Badge>
                 <Body style={{ fontSize: 13 }}>{m.audit.summary}</Body>
                 {m.audit.checks.map((check) => (
                   <Body style={s.small} key={check}>
@@ -404,7 +530,12 @@ export default function Conversation() {
                   · {m.audit.attempts} check{m.audit.attempts === 1 ? "" : "s"}
                   {"\n"}Suggestion: {m.audit.suggestionVersion} · Audit:{" "}
                   {m.audit.auditVersion}
-                  {"\n"}Models: none (local fixtures)
+                  {"\n"}Models:{" "}
+                  {m.audit.models
+                    ? `${m.audit.models.conversation} / ${m.audit.models.audit}`
+                    : "none (local fixtures)"}
+                  {m.audit.source === "live" &&
+                    `${"\n"}Profile sharing: ${m.audit.personalized ? "personalized check" : "generic guidance; answers not shared"}`}
                 </Body>
               </View>
             )}
@@ -424,6 +555,7 @@ export default function Conversation() {
             secondary
             title="Cancel"
             onPress={() => {
+              cancelLive();
               nonce.current++;
               busy.current = false;
               setPhase("");
@@ -483,6 +615,23 @@ export default function Conversation() {
         </View>
       )}
       <View style={{ gap: 10 }}>
+        <Button
+          secondary
+          title={showVoice ? "Hide voice recorder" : "Record a follow-up"}
+          icon="mic-outline"
+          disabled={!!phase || !profile}
+          onPress={() => setShowVoice((v) => !v)}
+        />
+        {showVoice && (
+          <VoiceRecorder
+            disabled={!!phase || !profile}
+            onTranscript={(text) =>
+              setMessage((prev) =>
+                `${prev}${prev ? " " : ""}${text}`.slice(0, 2000),
+              )
+            }
+          />
+        )}
         <TextField
           accessibilityLabel="Follow-up message"
           placeholder="Ask for another idea, or help taking a break…"
@@ -501,9 +650,35 @@ export default function Conversation() {
           {session.persisted === false
             ? "Temporary chat: it will disappear after closing the app. "
             : ""}
-          Offline replies follow a script. Use the quick actions or ask for a
-          break. Custom questions need a live service in a later milestone.
+          {session.mode === "live"
+            ? "Live requests use your currently synchronized profile. Failures never silently switch to scripted advice."
+            : "Offline replies follow a script. Use the quick actions or ask for a break."}
         </Body>
+        <Button
+          secondary
+          title={
+            session.mode === "live"
+              ? "Switch this chat to offline demo"
+              : "Switch this chat to live guidance"
+          }
+          disabled={
+            !!phase ||
+            (session.mode !== "live" &&
+              (!app.account ||
+                !state.cloud?.enabled ||
+                !hasGeminiConsent(state.settings)))
+          }
+          onPress={() =>
+            setState((prev) => ({
+              ...prev,
+              sessions: prev.sessions.map((s) =>
+                s.id === id
+                  ? { ...s, mode: s.mode === "live" ? "demo" : "live" }
+                  : s,
+              ),
+            }))
+          }
+        />
       </View>
       <Confirm
         visible={deleting}
@@ -512,6 +687,7 @@ export default function Conversation() {
         confirm="Delete chat"
         onCancel={() => setDeleting(false)}
         onConfirm={() => {
+          cancelLive();
           nonce.current++;
           stop();
           setState((prev) => ({

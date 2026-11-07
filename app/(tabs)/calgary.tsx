@@ -20,14 +20,16 @@ import {
   TextField,
   Title,
 } from "../../components/ui";
-import { eventFormat, events, sortedEvents } from "../../src/data/events";
+import { eventFormat, sortedEvents } from "../../src/data/events";
+import { useEvents } from "../../src/services/useEvents";
 export default function Calgary() {
+  const feed = useEvents();
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [past, setPast] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const filtered = sortedEvents(events, Date.now(), past).filter(
+  const filtered = sortedEvents(feed.events, Date.now(), past).filter(
     (e) =>
       (category === "All" || category === e.category) &&
       `${e.title} ${e.location} ${e.note}`
@@ -52,6 +54,27 @@ export default function Calgary() {
           Discover a reason to step out. Start with a place or activity that
           feels like you.
         </Body>
+      </View>
+      <View style={{ gap: 10 }}>
+        <Button
+          secondary
+          title={
+            feed.loading ? "Refreshing events…" : "Refresh organizer listings"
+          }
+          icon="refresh-outline"
+          busy={feed.loading}
+          onPress={() => void feed.refresh(true)}
+        />
+        <Body style={s.small}>
+          {feed.fetchedAt
+            ? `Last successful refresh: ${new Date(feed.fetchedAt).toLocaleString()} · ${feed.stale ? "cached / may be outdated" : "organizer listings"}`
+            : "Original directory · November 7, 2026"}
+        </Body>
+        {!!feed.warning && (
+          <Body accessibilityLiveRegion="polite" style={s.small}>
+            {feed.warning}
+          </Body>
+        )}
       </View>
       <TextField
         accessibilityLabel="Search Calgary events"
@@ -187,8 +210,11 @@ export default function Calgary() {
             <>
               <Body muted>{event.note}</Body>
               <Body style={s.small}>
-                Dates checked November 7, 2026. Confirm registration, pricing
-                and accessibility with the organizer before going.
+                {feed.fetchedAt
+                  ? `Organizer feed checked ${new Date(feed.fetchedAt).toLocaleDateString()}. `
+                  : "Original listing checked November 7, 2026. "}
+                Confirm registration, pricing and accessibility with the
+                organizer before going.
               </Body>
               <Button
                 secondary
@@ -233,8 +259,10 @@ export default function Calgary() {
           </Body>
         </View>
         <Body style={s.small}>
-          These are curated organizer listings, last checked November 7, 2026.
-          This version has no live event feed. StepIn is not affiliated with the
+          This directory refreshes from organizer pages through StepIn’s backend
+          and caches the last successful result for offline use. Date ranges
+          without individual sessions are omitted rather than guessing dates. It
+          does not cover every Calgary event. StepIn is not affiliated with the
           organizers.
         </Body>
         <Button

@@ -4,7 +4,7 @@ export type CalgaryEvent = {
   title: string;
   date: string;
   location: string;
-  category: string;
+  category: "Community" | "Meetups" | "Arts" | "Outdoors" | "Games";
   note: string;
   url: string;
   dateSource: string;

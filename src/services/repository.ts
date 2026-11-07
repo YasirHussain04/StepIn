@@ -91,11 +91,7 @@ export async function saveState(state: AppState): Promise<void> {
     }
     await connection.runAsync(
       "INSERT OR REPLACE INTO preferences VALUES(1, ?)",
-      JSON.stringify({
-        activeProfileId: state.activeProfileId,
-        draft: state.draft,
-        settings: state.settings,
-      }),
+      JSON.stringify({ ...state, profiles: undefined, sessions: undefined }),
     );
   });
 }

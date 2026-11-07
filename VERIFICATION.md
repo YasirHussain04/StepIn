@@ -1,46 +1,44 @@
 # StepIn verification
 
-Date: November 7, 2026. Scope: first mobile/offline milestone.
+Date: November 7, 2026. Scope: app-only backend/accounts/voice/event milestone, version 0.2.0. Meta integration remains outside this milestone.
 
-## Environment
+## Automated verification
 
-- Development host: Windows; system Node 22.11.0; project commands use local Node 22.22.0.
-- Expo 58.0.23 / React Native 0.88.1 / React 19.3.0 / Expo Router 58.0.30.
-- Browser: Codex in-app browser; phone-width viewport 390 × 844 and normal desktop viewport.
-- Physical Android/iOS phone: not available in this session. Expo Go launch and native SQLite execution are **not physically verified**.
-- Meta glasses/custom development build: **not implemented or tested**.
+- **85 tests passed across five files.** TypeScript check passed.
+- PostgreSQL tests execute both checked-in Supabase migrations using PGlite (real PostgreSQL in WASM), with a minimal test Auth schema and simulated user identities. This validates SQL/RLS behavior, not a deployed Supabase project or real JWT verification service.
+- Coverage includes required screening and scoring, profile activation concurrency, immutable records, operation idempotency, cross-user isolation, direct-write/RPC denial, history deletion epochs and tombstones, sensitive-answer redaction, account cache isolation and sync merge/conflict behavior.
+- Fastify tests exercise authenticated routes with the test Store, approved/revised guidance, independent audit rejection, malformed/incomplete outputs, stage timeout, stale-profile suppression, duplicate request handling, reused message IDs, temporary history, audio consent/duration checks and upload-buffer clearing. AI providers are controlled fakes in these tests.
+- Gemini adapter tests exercise the official SDK with a mocked HTTP transport: separate role instructions and schemas, exact-candidate audit input, revision feedback, Gemini-only model configuration, cancellation, missing keys and rejection of blocked/truncated/malformed/non-text output. Earlier provider consent cannot authorize the Gemini destination. These tests make no paid AI calls.
+- Event tests verify supported organizer HTML, omission of date ranges/untrusted hosts, category boundaries, Calgary summer/winter offsets, concurrent refresh deduplication and last-good-cache fallback.
+- Existing domain/persistence tests cover quiz draft/resume, independent scores, exclusions, fixture revision/provenance, playback guards, browser persistence, transient content and deletion.
+- Expo dependency compatibility check passed.
+- Combined production web, Android and iOS bundle export passed. Native Hermes bundles are approximately **4.2 MB each**, plus assets. These are compilation/export checks, not APK/IPA builds or device runs.
+- Current network-enabled npm audit reports **five moderate**, zero high and zero critical advisories in Expo CLI/fingerprint glob/minimatch tooling. The suggested fix downgrades Expo across SDK versions and was not applied.
 
-## Automated checks
+## Real local API and browser checks
 
-- Vitest: **28 tests passed**. Covers all 10 missing-answer cases, invalid answer types and exclusions, non-disclosure, score boundaries, profile snapshot independence, incomplete-profile service gates, fixture revision/provenance, distinct scenarios, profile-aware pacing, clarification, audio preferences, unapproved-playback prevention, chronological events and organizer-local times, browser draft/chat persistence, transient history, deletion and failed storage.
-- TypeScript check passed with the Expo-compatible TypeScript 6.0.3 / React types 19.3.0.
-- Expo dependency compatibility check passed: dependencies up to date.
-- Production web export passed. Unused icon sets were removed; only the Ionicons font is bundled.
-- Final combined web, Android and iOS export passed using `node scripts/run.cjs expo export --platform all --output-dir dist-final`. Native bytecode is approximately 2.8 MB per platform plus assets. These are JavaScript/Hermes bundle checks, not APK/IPA builds, hardware tests or Expo Go device launches.
-- Browser persistence tests use a localStorage test implementation; they do not claim native SQLite coverage.
+- Started the real Fastify server and reached its health endpoint. Missing credentials are reported as missing capabilities; startup does not claim provider access.
+- A real organizer refresh returned **12** supported listings from Calgary Public Library, with organizer provenance and a successful timestamp. The app displayed **10 upcoming** listings after hiding past dates, ordered nearest first.
+- In the browser, verified Settings can reach the backend and accurately reports missing account/model configuration.
+- Checked Speak's voice panel: recording and browser dictation controls are separate, remote processing is explained and submission stays manual. No microphone permission was accepted and no actual recording was captured during this verification.
+- Opened a fictional game-night chat, completed its fixture suggestion/review, inspected the two-check provenance with “Models: none (local fixtures),” and reloaded/reopened the saved conversation successfully.
+- Inspected conversation layout at **390 × 844** and the updated tabs/account/event states. No browser warning/error entries were returned in the inspected console sample.
+- Earlier baseline walkthrough also completed and resumed the full quiz, preserved the active profile during retake, searched chat content, exercised a simpler follow-up and checked event filtering.
 
-## Browser walkthrough
+## Configuration still needed
 
-- Confirmed a demo action cannot bypass initial screening.
-- Confirmed Continue is disabled with no answer.
-- Answered question 1, closed and reloaded, then resumed at question 2.
-- Completed all 10 questions including explicit Prefer not to say for both sensitive questions.
-- Reviewed 25/100 comfort and 100/100 desired activity independently, then confirmed activation.
-- Opened game-night practice, observed drafting/checking and an approved fixture response.
-- Inspected the recorded second check and profile version; the UI explicitly identifies fixture provenance and no live model.
-- Reloaded and reopened the chat, submitted a simpler follow-up, and found the saved chat by an icebreaker keyword.
-- Filtered Calgary listings to Arts and inspected settings and active scores at phone width. Corrected a browser timezone override issue by preserving the organizer-local timestamp's wall time.
-- Started an unfinished retake, saved and closed it, and confirmed profile version 1 remained active.
-- Resolved an empty-string child warning found during the conversation walkthrough. Buttons and tabs now have explicit accessible labels, and decorative icons are hidden from assistive technology.
+The local ignored `.env` was created from the template and its AI model settings migrated to Gemini. Other connection values were preserved. The user is configuring the existing project. Run `npm run check:backend` after applying both migrations and adding values. Its schema check is read-only; it is not a full sign-in/sync or model smoke test.
 
-## Outstanding device verification
+Real Supabase email registration, confirmation, password recovery, JWT verification, account sync, multi-device conflicts and account deletion have **not** been exercised against the user's hosted project. Both coaching roles now use Gemini; the earlier provider adapter and dependency have been removed.
 
-Run the complete flow on the presentation phone: Expo Go SDK match, offline relaunch, SQLite draft/chat persistence and deletions, native keyboard dictation, TTS/stop and Bluetooth routing, interruption, large system fonts, VoiceOver/TalkBack, keyboard avoidance and safe areas. No claim that these device checks passed is made.
+The real Gemini model-list request succeeded using the configured local key. Generation with `gemini-flash-latest` returned HTTP 404. The listed explicit `gemini-3.8-flash` returned HTTP 503 on two attempts, so live suggestion/audit completion is **not verified**. A diagnostic request with listed `gemini-2.5-flash` also returned HTTP 404. Defaults and the local alias configuration are pinned to `gemini-3.8-flash`, with no runtime fallback. Only fictional context was sent; no account profiles or chat history were used. Audio transcription has not been exercised. Retry `npm run check:agents` when Google generation is available.
 
-## Known limits
+Before a live demo, create a disposable test account through the app and verify: email redirect/recovery; explicit sync consent; initial profile upload; one live audited turn; retry; profile retake on another device; conflict choices; deletion propagation; sign-out cache clearing; history-off behavior; and account deletion.
 
-- Scripted coaching with deterministic local rules; no real suggestion/audit models or live room understanding.
-- Native voice input uses keyboard dictation. Embedded native transcription/streaming voice is not implemented. Actual microphone and audible playback were not exercised by automation.
-- Curated Calgary listings are cached as of November 7, not exhaustive or automatically refreshed. Organizer time discrepancies require confirmation.
-- Local storage has no StepIn encryption or app lock. No remote account, sync, backup deletion or cloud security is implemented.
-- `npm audit` after updating the test runner reported five moderate advisories in Expo CLI/fingerprint transitive glob/minimatch tooling; no critical/high advisories remained. The suggested automatic fix would downgrade Expo across major SDK versions, so it was not applied. Production release requires reviewing supported upstream patches.
+## Device and deployment checks remaining
+
+No physical Android/iOS phone was available. Verify Expo Go SDK compatibility, microphone permission denial/grant, actual 45-second recording/preview/transcription, transcript edits, interruption/background cleanup, SQLite persistence/deletions, SecureStore recovery, manual TTS and Bluetooth routing, keyboard avoidance, safe areas, large fonts and VoiceOver/TalkBack on the presentation phone.
+
+The backend has not been deployed. Production HTTPS, CORS, email delivery, hosting secrets, monitoring and backup retention need configuration. Cancellation/session locks, rate limits, temporary conversations and the event cache currently assume one server process.
+
+No Meta glasses discovery, native bridge, camera sweep, scene analysis or verified glasses audio routing is implemented. The app does not import a phone camera or image-picker fallback.

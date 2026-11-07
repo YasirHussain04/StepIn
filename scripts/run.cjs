@@ -5,6 +5,7 @@ const targets = {
   expo: "expo/bin/cli",
   tsc: "typescript/bin/tsc",
   vitest: "vitest/vitest.mjs",
+  tsx: "tsx/dist/cli.mjs",
 };
 const target = targets[process.argv[2]];
 if (!target) throw new Error("Unknown project tool");
