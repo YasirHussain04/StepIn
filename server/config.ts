@@ -26,21 +26,34 @@ const schema = z.object({
       "http://localhost:8091,http://localhost:8081,http://localhost:8082",
     ),
   EVENTS_FEED_URLS: z.string().default("https://www.calgarylibrary.ca/"),
+  LOCAL_DEV_BYPASS: z.enum(["true", "false"]).optional(),
 });
-export type Config = z.infer<typeof schema>;
+export type Config = Omit<z.infer<typeof schema>, "LOCAL_DEV_BYPASS"> & {
+  LOCAL_DEV_BYPASS: boolean;
+};
 export function readConfig(
   env: Record<string, string | undefined> = process.env,
 ): Config {
   const clean = Object.fromEntries(
     Object.entries(env).filter(([, v]) => v !== ""),
   );
-  const config = schema.parse(clean);
+  const parsed = schema.parse(clean);
   if (
-    config.NODE_ENV === "production" &&
-    (!config.SUPABASE_URL ||
-      !config.SUPABASE_ANON_KEY ||
-      !config.SUPABASE_SERVICE_ROLE_KEY)
+    parsed.NODE_ENV === "production" &&
+    (!parsed.SUPABASE_URL ||
+      !parsed.SUPABASE_ANON_KEY ||
+      !parsed.SUPABASE_SERVICE_ROLE_KEY)
   )
     throw new Error("Supabase server configuration is required in production");
-  return config;
+  const bypass =
+    parsed.LOCAL_DEV_BYPASS === "true"
+      ? true
+      : parsed.LOCAL_DEV_BYPASS === "false"
+        ? false
+        : parsed.NODE_ENV !== "production";
+  if (parsed.NODE_ENV === "production" && bypass)
+    throw new Error("LOCAL_DEV_BYPASS cannot be enabled in production");
+  return { ...parsed, LOCAL_DEV_BYPASS: bypass };
 }
+export const LOCAL_DEV_USER = "local-dev";
+export const LOCAL_DEV_TOKEN = "local-dev";

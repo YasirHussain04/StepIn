@@ -211,11 +211,17 @@ export const CoachRequestSchema = z
       .strict()
       .optional(),
     scene: SceneSummarySchema.optional(),
+    /** Local-device mode only: profile payload when cloud sync is off. */
+    localProfile: ProfileSchema.optional(),
   })
   .strict()
   .refine(
     (v) => (v.history ? !v.transientRoom : !!v.transientRoom),
     "Transient context is required only when history is off",
+  )
+  .refine(
+    (v) => !(v.localProfile && v.history),
+    "localProfile requires history off (transient room coaching)",
   );
 export type CoachRequest = z.infer<typeof CoachRequestSchema>;
 export const CoachResponseSchema = z

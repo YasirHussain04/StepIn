@@ -24,7 +24,7 @@ import { ClientError } from "../../src/services/api";
 import type { SceneSummary } from "../../shared/contracts";
 
 export default function Speak() {
-  const { state, setState, profile, account } = useApp();
+  const { state, setState, profile } = useApp();
   const [still, setStill] = useState<CapturedStill | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [sceneBusy, setSceneBusy] = useState(false);
@@ -71,14 +71,9 @@ export default function Speak() {
       router.push("/quiz");
       return;
     }
-    if (
-      state.settings.mode === "live" &&
-      (!account ||
-        !state.cloud?.enabled ||
-        !hasGeminiConsent(state.settings))
-    ) {
+    if (state.settings.mode === "live" && !hasGeminiConsent(state.settings)) {
       setSceneError(
-        "Live scene analysis needs sign-in, account sync, and remote AI consent in Settings. You can still describe the room in text for offline demo.",
+        "Live scene analysis needs remote AI consent in Settings. You can still describe the room in text for offline demo.",
       );
       return;
     }

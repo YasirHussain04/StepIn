@@ -18,12 +18,13 @@ import { useApp } from "../../src/state/AppProvider";
 export default function Chats() {
   const { state, syncStatus, syncError, flushSync } = useApp();
   const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
   const sessions = [...state.sessions]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .filter((session) =>
-      `${session.title} ${session.room} ${session.messages.map((m) => `${m.text} ${m.icebreaker ?? ""}`).join(" ")}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+      !needle
+        ? true
+        : `${session.title} ${session.room}`.toLowerCase().includes(needle),
     );
   return (
     <Page>

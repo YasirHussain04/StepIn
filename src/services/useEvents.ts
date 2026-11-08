@@ -9,34 +9,38 @@ export function useEvents() {
   const [error, setError] = useState("");
   const active = useRef(false);
   const refresh = useCallback(
-    async (force = false) => {
+    async (force = false, { silent = false } = {}) => {
       if (active.current) return;
       active.current = true;
-      setLoading(true);
-      setError("");
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
       try {
         const response = await refreshEvents(state.settings.apiUrl, force);
         setState((prev) => ({ ...prev, eventCache: response }));
+        if (silent) setError("");
       } catch (e) {
-        setError(
-          e instanceof Error
-            ? e.message
-            : "Could not refresh. Cached listings remain available.",
-        );
+        if (!silent)
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Could not refresh. Cached listings remain available.",
+          );
       } finally {
         active.current = false;
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [state.settings.apiUrl, setState],
   );
   useEffect(() => {
-    void refresh();
+    void refresh(false, { silent: true });
     const interval = setInterval(() => {
-      void refresh();
+      void refresh(false, { silent: true });
     }, 15 * 60_000);
     const sub = AppState.addEventListener("change", (status) => {
-      if (status === "active") void refresh();
+      if (status === "active") void refresh(false, { silent: true });
     });
     return () => {
       clearInterval(interval);
@@ -50,6 +54,6 @@ export function useEvents() {
     stale: !!error || (state.eventCache?.stale ?? true),
     warning: error || state.eventCache?.warning || "",
     loading,
-    refresh,
+    refresh: (force = false) => refresh(force, { silent: false }),
   };
 }

@@ -12,7 +12,7 @@ import { preference, requireProfile } from "../../src/domain/quiz";
 import type { Agents, AgentInput } from "../providers/agents";
 import { Store } from "../store";
 import { ApiError } from "../errors";
-import { Config } from "../config";
+import { Config, LOCAL_DEV_USER } from "../config";
 import { AUDIT_VERSION, SUGGESTION_VERSION } from "../agents/prompts";
 
 const checks = [
@@ -143,16 +143,36 @@ export class Coach {
     } else {
       for (const [key, value] of this.transient)
         if (value.expires < Date.now()) this.transient.delete(key);
-      const snapshot = await this.store.snapshot(userId);
-      profile = snapshot.profiles.find(
-        (p) => p.id === snapshot.activeProfileId,
-      )!;
-      if (!profile)
-        throw new ApiError(
-          "SCREENING_REQUIRED",
-          "Complete and sync your profile first.",
-          403,
+      if (request.localProfile) {
+        if (userId !== LOCAL_DEV_USER)
+          throw new ApiError(
+            "LOCAL_PROFILE_DENIED",
+            "Device-local profiles are only accepted in local development mode.",
+            403,
+          );
+        if (request.localProfile.id !== request.expectedProfileVersionId)
+          throw new ApiError(
+            "STALE_PROFILE",
+            "Your profile changed. Retry with the current profile.",
+            409,
+          );
+        profile = request.localProfile;
+      } else {
+        const snapshot = await this.store.snapshot(userId);
+        profile = snapshot.profiles.find(
+          (p) => p.id === snapshot.activeProfileId,
+        )!;
+        if (!profile)
+          throw new ApiError(
+            "SCREENING_REQUIRED",
+            "Complete and sync your profile first.",
+            403,
+          );
+        await this.store.assertProfile(
+          userId,
+          request.expectedProfileVersionId,
         );
+      }
       const key = `${userId}:${request.sessionId}`;
       transient = this.transient.get(key);
       if (!transient) {
@@ -191,7 +211,6 @@ export class Coach {
           "Use a new request for changed content.",
           409,
         );
-      await this.store.assertProfile(userId, request.expectedProfileVersionId);
       const cached = transient.responses.get(request.requestId);
       if (cached) return cached;
       transient.hashes.set(request.requestId, hash);

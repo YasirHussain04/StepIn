@@ -55,27 +55,16 @@ export default function Calgary() {
           feels like you.
         </Body>
       </View>
-      <View style={{ gap: 10 }}>
-        <Button
-          secondary
-          title={
-            feed.loading ? "Refreshing events…" : "Refresh organizer listings"
-          }
-          icon="refresh-outline"
-          busy={feed.loading}
-          onPress={() => void feed.refresh(true)}
-        />
-        <Body style={s.small}>
-          {feed.fetchedAt
-            ? `Last successful refresh: ${new Date(feed.fetchedAt).toLocaleString()} · ${feed.stale ? "cached / may be outdated" : "organizer listings"}`
-            : "Original directory · November 7, 2026"}
+      <Body style={s.small}>
+        {feed.fetchedAt
+          ? `Updated ${new Date(feed.fetchedAt).toLocaleString()}${feed.stale ? " · may be outdated" : ""}`
+          : "Bundled directory · November 7, 2026"}
+      </Body>
+      {!!feed.warning && (
+        <Body accessibilityLiveRegion="polite" style={s.small}>
+          {feed.warning}
         </Body>
-        {!!feed.warning && (
-          <Body accessibilityLiveRegion="polite" style={s.small}>
-            {feed.warning}
-          </Body>
-        )}
-      </View>
+      )}
       <TextField
         accessibilityLabel="Search Calgary events"
         placeholder="Search events or places"
@@ -265,6 +254,13 @@ export default function Calgary() {
           does not cover every Calgary event. StepIn is not affiliated with the
           organizers.
         </Body>
+        <Button
+          secondary
+          title={feed.loading ? "Updating…" : "Update list"}
+          icon="refresh-outline"
+          busy={feed.loading}
+          onPress={() => void feed.refresh(true)}
+        />
         <Button
           secondary
           title="Browse more library events"

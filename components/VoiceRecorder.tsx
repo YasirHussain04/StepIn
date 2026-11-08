@@ -22,7 +22,7 @@ export function VoiceRecorder({
   onTranscript: (text: string) => void;
   disabled?: boolean;
 }) {
-  const { state, setState, account } = useApp();
+  const { state, setState } = useApp();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recording = useAudioRecorderState(recorder, 200);
   const player = useAudioPlayer(null);
@@ -77,7 +77,7 @@ export function VoiceRecorder({
   }, [clean]);
   useEffect(() => {
     void clean();
-  }, [account?.user.id]);
+  }, []);
   async function stopRecording() {
     if (stopping.current) return;
     stopping.current = true;
@@ -272,15 +272,13 @@ export function VoiceRecorder({
             title={busy ? "Transcribing…" : "Transcribe & review text"}
             icon="document-text-outline"
             busy={busy}
-            disabled={!state.settings.voiceConsent || !account}
+            disabled={!state.settings.voiceConsent}
             onPress={() => void transcribe()}
           />
-          {!account && (
-            <Body style={s.small}>
-              Sign in through Settings to transcribe. Recording preview and
-              typed input are available without an account.
-            </Body>
-          )}
+          <Body style={s.small}>
+            Transcription uses your local StepIn server and Gemini. Allow remote
+            transcription above first.
+          </Body>
           <Button
             secondary
             title={busy ? "Cancel upload & discard" : "Discard recording"}

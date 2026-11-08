@@ -12,7 +12,7 @@ import {
   SyncRequestSchema,
 } from "../shared/contracts";
 import { Store, SupabaseStore } from "./store";
-import { Config } from "./config";
+import { Config, LOCAL_DEV_TOKEN, LOCAL_DEV_USER } from "./config";
 import { ApiError } from "./errors";
 import { Coach } from "./coach/run";
 import type { Agents } from "./providers/agents";
@@ -84,13 +84,22 @@ export async function buildApp(
       request.routeOptions.url !== "/api/events"
     ) {
       const match = request.headers.authorization?.match(/^Bearer (.+)$/);
-      if (!match)
+      const token = match?.[1];
+      if (
+        config.LOCAL_DEV_BYPASS &&
+        (token === LOCAL_DEV_TOKEN ||
+          (!token && config.NODE_ENV === "development"))
+      ) {
+        request.actor = { id: LOCAL_DEV_USER };
+        return;
+      }
+      if (!token)
         throw new ApiError(
           "UNAUTHENTICATED",
           "Sign in to use this service.",
           401,
         );
-      request.actor = await store.authenticate(match[1]);
+      request.actor = await store.authenticate(token);
     }
   });
   app.setErrorHandler((error, _request, reply) => {
@@ -135,6 +144,7 @@ export async function buildApp(
       scene: !!config.GEMINI_API_KEY,
       events: true,
       glasses: true,
+      localDevBypass: config.LOCAL_DEV_BYPASS,
     },
     models: {
       conversation: config.CONVERSATION_MODEL,

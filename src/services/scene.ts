@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
-import { supabase } from "./auth";
 import { apiBase, ClientError } from "./api";
+import { bearerAuthHeader } from "./authHeaders";
 import {
   SceneResponseSchema,
   type SceneSummary,
@@ -15,12 +15,6 @@ export async function analyzeSceneStills(
     throw new ClientError(
       "SCENE_FRAME_LIMIT",
       "Send 1 to 3 reviewed glasses stills.",
-    );
-  const { data } = (await supabase?.auth.getSession()) ?? { data: null };
-  if (!data?.session)
-    throw new ClientError(
-      "UNAUTHENTICATED",
-      "Sign in before sending glasses stills for scene analysis.",
     );
   const form = new FormData();
   for (let i = 0; i < uris.length; i++) {
@@ -42,7 +36,7 @@ export async function analyzeSceneStills(
     body: form,
     signal,
     headers: {
-      authorization: `Bearer ${data.session.access_token}`,
+      authorization: await bearerAuthHeader(),
       "x-image-consent": "true",
     },
   });

@@ -64,6 +64,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loaded = useRef(false);
   const writes = useRef(Promise.resolve());
   const syncing = useRef<Promise<void> | null>(null);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPersist = useRef<AppState | null>(null);
   const commit = useCallback((next: AppState) => {
     stateRef.current = next;
     rawSetState(next);
@@ -72,6 +74,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (update) => {
       const old = stateRef.current;
       const next = typeof update === "function" ? update(old) : update;
+      // Local-device mode: skip expensive sync queue diffs.
+      if (!next.cloud?.enabled && !old.cloud?.enabled) {
+        commit(next);
+        return;
+      }
       const ops = changesToOperations(old, next);
       const removingProfile = ops.some(
         (op) =>
@@ -150,16 +157,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [ready, commit]);
   useEffect(() => {
     if (!ready) return;
-    const snapshot = JSON.parse(JSON.stringify(state)) as AppState;
-    writes.current = writes.current
-      .catch(() => {})
-      .then(() => saveState(snapshot))
-      .then(() => setStorageError(null))
-      .catch(() =>
-        setStorageError(
-          "Changes are in memory but could not be saved. Keep the app open and retry.",
-        ),
-      );
+    pendingPersist.current = state;
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      const snapshot = pendingPersist.current;
+      if (!snapshot) return;
+      const cloned = JSON.parse(JSON.stringify(snapshot)) as AppState;
+      writes.current = writes.current
+        .catch(() => {})
+        .then(() => saveState(cloned))
+        .then(() => setStorageError(null))
+        .catch(() =>
+          setStorageError(
+            "Changes are in memory but could not be saved. Keep the app open and retry.",
+          ),
+        );
+    }, 250);
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
   }, [state, ready, retry]);
   useEffect(() => {
     const sub = NativeAppState.addEventListener("change", (value) => {

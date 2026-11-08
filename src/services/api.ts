@@ -1,10 +1,10 @@
 import { Platform } from "react-native";
-import { supabase } from "./auth";
 import {
   CoachRequest,
   CoachResponseSchema,
   EventsResponseSchema,
 } from "../../shared/contracts";
+import { bearerAuthHeader } from "./authHeaders";
 export class ClientError extends Error {
   constructor(
     public code: string,
@@ -45,15 +45,7 @@ export async function api<T>(
 ): Promise<T> {
   const base = apiBase(options.url);
   const headers: Record<string, string> = {};
-  if (!options.public) {
-    const { data, error } = (await supabase?.auth.getSession()) ?? {
-      data: null,
-      error: null,
-    };
-    if (error || !data?.session)
-      throw new ClientError("UNAUTHENTICATED", "Sign in to continue.", 401);
-    headers.authorization = `Bearer ${data.session.access_token}`;
-  }
+  if (!options.public) headers.authorization = await bearerAuthHeader();
   if (options.body !== undefined) headers["content-type"] = "application/json";
   let response: Response;
   try {

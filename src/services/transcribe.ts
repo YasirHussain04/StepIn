@@ -1,18 +1,12 @@
 import { Platform } from "react-native";
-import { supabase } from "./auth";
 import { apiBase, ClientError } from "./api";
+import { bearerAuthHeader } from "./authHeaders";
 export async function transcribeClip(
   uri: string,
   duration: number,
   url: string | undefined,
   signal: AbortSignal,
 ): Promise<string> {
-  const { data } = (await supabase?.auth.getSession()) ?? { data: null };
-  if (!data?.session)
-    throw new ClientError(
-      "UNAUTHENTICATED",
-      "Sign in before transcribing. You can still use keyboard dictation or type.",
-    );
   const form = new FormData();
   if (Platform.OS === "web") {
     const clip = await fetch(uri).then((r) => r.blob());
@@ -33,7 +27,7 @@ export async function transcribeClip(
     body: form,
     signal,
     headers: {
-      authorization: `Bearer ${data.session.access_token}`,
+      authorization: await bearerAuthHeader(),
       "x-audio-consent": "true",
       "x-recording-duration": String(duration),
     },

@@ -107,14 +107,9 @@ export default function Conversation() {
     }
     if (!current || busy.current) return;
     const live = current.mode === "live";
-    if (
-      live &&
-      (!store.account ||
-        !store.getState().cloud?.enabled ||
-        !hasGeminiConsent(store.getState().settings))
-    ) {
+    if (live && !hasGeminiConsent(store.getState().settings)) {
       setError(
-        "Live guidance needs sign-in, enabled account sync, and remote-processing consent in Settings. You can explicitly switch this chat to the offline demo.",
+        "Live guidance needs remote AI consent in Settings. You can switch this chat to the offline demo.",
       );
       return;
     }
@@ -123,11 +118,6 @@ export default function Conversation() {
     stop();
     setError("");
     try {
-      if (live) {
-        setPhase("Synchronizing your current profile…");
-        await store.flushSync();
-      }
-      if (nonce.current !== token || !focused.current) return;
       const stateNow = store.getState();
       current = stateNow.sessions.find((s) => s.id === id);
       if (!current) throw new Error("This conversation was deleted.");
@@ -137,13 +127,19 @@ export default function Conversation() {
       if (!active)
         throw new Error("Complete and confirm your preferences first.");
       const profileId = active.id;
-      const history = stateNow.settings.history && current.persisted !== false;
+      const cloudSync = !!stateNow.cloud?.enabled && !!store.account;
+      // Local-device live turns stay on-device for history; server uses transient room + localProfile.
+      const history =
+        cloudSync &&
+        stateNow.settings.history &&
+        current.persisted !== false;
       const policy = JSON.stringify({
         provider: "gemini",
         profileId,
         history,
         share: stateNow.settings.shareProfile !== false,
         affirmations: stateNow.settings.affirmations,
+        local: !cloudSync,
       });
       const oldUser = retry
         ? [...current.messages].reverse().find((m) => m.role === "user")
@@ -195,8 +191,11 @@ export default function Conversation() {
       setMessage("");
       let response: Message;
       if (live) {
-        await store.flushSync();
-        if (nonce.current !== token || !focused.current) return;
+        if (cloudSync) {
+          setPhase("Synchronizing your current profile…");
+          await store.flushSync();
+          if (nonce.current !== token || !focused.current) return;
+        }
         requestAbort.current = new AbortController();
         activeRequest.current = user.requestId!;
         setPhase("Drafting and independently checking your idea…");
@@ -218,6 +217,7 @@ export default function Conversation() {
             ...(history
               ? {}
               : {
+                  localProfile: active,
                   transientRoom: {
                     description: current.room,
                     scenarioId: current.scenarioId,
@@ -659,7 +659,7 @@ export default function Conversation() {
             ? "Temporary chat: it will disappear after closing the app. "
             : ""}
           {session.mode === "live"
-            ? "Live requests use your currently synchronized profile. Failures never silently switch to scripted advice."
+            ? "Live requests use your on-device profile with Gemini. Failures never silently switch to scripted advice."
             : "Offline replies follow a script. Use the quick actions or ask for a break."}
         </Body>
         <Button
@@ -671,10 +671,7 @@ export default function Conversation() {
           }
           disabled={
             !!phase ||
-            (session.mode !== "live" &&
-              (!app.account ||
-                !state.cloud?.enabled ||
-                !hasGeminiConsent(state.settings)))
+            (session.mode !== "live" && !hasGeminiConsent(state.settings))
           }
           onPress={() =>
             setState((prev) => ({
