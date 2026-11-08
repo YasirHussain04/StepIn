@@ -71,6 +71,8 @@ export type AppState = {
   activeProfileId: string | null;
   draft: { answers: Answers; step: number } | null;
   sessions: Session[];
+  /** Local-only glasses scene summaries keyed by session id — never synced. */
+  scenes?: Record<string, import("../../shared/contracts").SceneSummary>;
   settings: Settings;
   ownerId?: string | null;
   cloud?: {
@@ -88,6 +90,7 @@ export const INITIAL_STATE: AppState = {
   activeProfileId: null,
   draft: null,
   sessions: [],
+  scenes: {},
   settings: {
     history: true,
     affirmations: true,

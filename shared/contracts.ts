@@ -170,6 +170,26 @@ export const ReviewSchema = z
   })
   .strict();
 export type Review = z.infer<typeof ReviewSchema>;
+export const SceneSummarySchema = z
+  .object({
+    captureId: Id,
+    observedAt: z.iso.datetime(),
+    observations: z.array(z.string().min(1).max(350)).max(8),
+    activities: z.array(z.string().min(1).max(200)).max(6),
+    readableSigns: z.array(z.string().min(1).max(200)).max(6),
+    uncertainties: z.array(z.string().min(1).max(300)).max(6),
+    needsClarification: z.boolean(),
+    model: z.string().max(80),
+    provenance: z.literal("meta_glasses"),
+  })
+  .strict();
+export type SceneSummary = z.infer<typeof SceneSummarySchema>;
+export const SceneResponseSchema = z
+  .object({
+    scene: SceneSummarySchema,
+  })
+  .strict();
+export type SceneResponse = z.infer<typeof SceneResponseSchema>;
 export const CoachRequestSchema = z
   .object({
     requestId: Id,
@@ -190,6 +210,7 @@ export const CoachRequestSchema = z
       })
       .strict()
       .optional(),
+    scene: SceneSummarySchema.optional(),
   })
   .strict()
   .refine(
