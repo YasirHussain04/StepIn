@@ -123,7 +123,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isolateAccount(
           {
             ...saved,
-            settings: { ...INITIAL_STATE.settings, ...saved.settings },
+            scenes: saved.scenes ?? {},
+            pendingEvent: saved.pendingEvent ?? null,
+            // Expo Go demo defaults: keep live AI on even if an older install
+            // had consent off / demo mode saved.
+            settings: {
+              ...INITIAL_STATE.settings,
+              ...saved.settings,
+              mode: "live",
+              processingConsent: true,
+              processingProvider: "gemini",
+              voiceConsent: true,
+            },
           },
           initial?.user.id ?? null,
         ),

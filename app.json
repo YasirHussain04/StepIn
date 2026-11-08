@@ -2,17 +2,21 @@
   "expo": {
     "name": "StepIn",
     "slug": "stepin",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "scheme": "stepin",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ca.stepin.mobile",
-      "deploymentTarget": "16.4"
+      "infoPlist": {
+        "NSCameraUsageDescription": "StepIn uses the camera so you can photograph an event scene for coaching context.",
+        "NSPhotoLibraryUsageDescription": "StepIn can use a photo you choose to understand the gathering before coaching."
+      }
     },
     "android": {
-      "package": "ca.stepin.mobile"
+      "package": "ca.stepin.mobile",
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
     },
     "web": {
       "bundler": "metro",
@@ -33,12 +37,11 @@
         }
       ],
       "expo-secure-store",
-      "expo-dev-client",
       [
-        "expo-meta-wearables-dat",
+        "expo-image-picker",
         {
-          "urlScheme": "stepin",
-          "bluetoothUsageDescription": "StepIn uses Bluetooth to connect to Meta glasses for microphone, speaker, and camera stills."
+          "cameraPermission": "Allow StepIn to photograph the gathering for coaching context.",
+          "photosPermission": "Allow StepIn to use a photo you choose for coaching context."
         }
       ]
     ],

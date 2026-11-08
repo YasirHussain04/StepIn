@@ -203,8 +203,8 @@ export function VoiceRecorder({
     >
       <Body style={{ fontWeight: "600" }}>Record a voice message</Body>
       <Body style={s.small}>
-        Up to 45 seconds, only while this screen is open. If Meta glasses are
-        connected as a Bluetooth headset, recording uses the glasses mic (HFP).
+        Up to 45 seconds, only while this screen is open. Recording uses your
+        phone microphone.
         Review your recording, then choose whether to send it to StepIn’s server
         and Google for transcription. The editable transcript is not sent as a
         chat until you submit it.

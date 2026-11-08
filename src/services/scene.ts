@@ -12,18 +12,18 @@ export async function analyzeSceneStills(
   if (!uris.length || uris.length > 3)
     throw new ClientError(
       "SCENE_FRAME_LIMIT",
-      "Send 1 to 3 reviewed glasses stills.",
+      "Send 1 to 3 reviewed photos.",
     );
   const form = new FormData();
   for (let i = 0; i < uris.length; i++) {
     const uri = uris[i];
     const blob = await uploadFile(uri, signal);
     if (blob.size > 2 * 1024 * 1024)
-      throw new ClientError("TOO_LARGE", "Each still must be under 2 MB.");
+      throw new ClientError("TOO_LARGE", "Each photo must be under 2 MB.");
     if (!blob.size)
       throw new ClientError(
         "INVALID_IMAGE",
-        "The still is empty. Capture it again.",
+        "The photo is empty. Capture it again.",
       );
     form.append(
       "image",
@@ -63,6 +63,17 @@ export function roomFromScene(scene: SceneSummary): string {
   ];
   const text = parts.join(". ").trim();
   return text
-    ? `Glasses scene: ${text}`.slice(0, 2000)
-    : "Glasses scene captured; details were unclear.";
+    ? `Phone scene: ${text}`.slice(0, 2000)
+    : "Phone scene captured; details were unclear.";
+}
+
+export function roomFromEvent(event: {
+  title: string;
+  location: string;
+  note: string;
+}): string {
+  return `Event: ${event.title}. Location: ${event.location}. Notes: ${event.note}`.slice(
+    0,
+    2000,
+  );
 }

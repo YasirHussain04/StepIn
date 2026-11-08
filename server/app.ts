@@ -143,7 +143,7 @@ export async function buildApp(
   });
   app.get("/health", async () => ({
     status: "ok",
-    version: "0.2.0",
+    version: "0.3.0",
     capabilities: {
       accounts: !!(
         config.SUPABASE_URL &&
@@ -156,7 +156,7 @@ export async function buildApp(
       live: !!config.GEMINI_API_KEY,
       quiz: !!config.GEMINI_API_KEY,
       events: true,
-      glasses: true,
+      phoneCamera: true,
       localDevBypass: config.LOCAL_DEV_BYPASS,
     },
     models: {
@@ -601,7 +601,7 @@ export async function buildApp(
       if (request.headers["x-image-consent"] !== "true")
         throw new ApiError(
           "CONSENT_REQUIRED",
-          "Confirm sending glasses stills for scene analysis before uploading.",
+          "Confirm sending photos for scene analysis before uploading.",
           403,
         );
       const frames: { bytes: Buffer; mimeType: string }[] = [];
@@ -610,21 +610,21 @@ export async function buildApp(
         if (frames.length >= 3)
           throw new ApiError(
             "SCENE_FRAME_LIMIT",
-            "Send at most 3 glasses stills.",
+            "Send at most 3 photos.",
             400,
           );
         const mime = file.mimetype.split(";")[0].toLowerCase();
         if (!IMAGE_TYPES.has(mime))
           throw new ApiError(
             "UNSUPPORTED_IMAGE",
-            "Use JPEG or PNG stills from the glasses camera.",
+            "Use JPEG or PNG photos from your phone camera.",
             415,
           );
         const buffer = await file.toBuffer();
         if (buffer.length < 64 || file.file.truncated)
           throw new ApiError(
             "INVALID_IMAGE",
-            "A still is empty or too large (max 2 MB each).",
+            "A photo is empty or too large (max 2 MB each).",
             400,
           );
         frames.push({ bytes: buffer, mimeType: mime });
@@ -632,7 +632,7 @@ export async function buildApp(
       if (!frames.length)
         throw new ApiError(
           "IMAGE_REQUIRED",
-          "Capture and review a glasses still before sending.",
+          "Capture and review a photo before sending.",
           400,
         );
       const abort = new AbortController();

@@ -594,7 +594,7 @@ describe("authenticated API and fail-closed agent coordination", () => {
           socialSetup: "small_group" as const,
           coachingFocus: ["Welcome table near the door"],
           model: "test-scene",
-          provenance: "meta_glasses" as const,
+          provenance: "phone_camera" as const,
         };
       }),
     };
@@ -632,7 +632,7 @@ describe("authenticated API and fail-closed agent coordination", () => {
       payload,
     });
     expect(result.statusCode).toBe(200);
-    expect(result.json().scene.provenance).toBe("meta_glasses");
+    expect(result.json().scene.provenance).toBe("phone_camera");
     expect(seen).not.toBeNull();
     expect((seen as unknown as Buffer).every((v) => v === 0)).toBe(true);
     await app.close();

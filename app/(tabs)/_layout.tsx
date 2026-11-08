@@ -2,7 +2,7 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { C, Icon, IconName } from "../../components/ui";
 const icons: Record<string, IconName> = {
-  index: "mic-outline",
+  index: "compass-outline",
   chats: "chatbubbles-outline",
   calgary: "calendar-outline",
   settings: "options-outline",
@@ -34,7 +34,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: "Speak", tabBarAccessibilityLabel: "Speak" }}
+        options={{ title: "Coach", tabBarAccessibilityLabel: "Coach" }}
       />
       <Tabs.Screen
         name="chats"

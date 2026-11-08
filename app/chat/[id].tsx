@@ -35,7 +35,10 @@ import { SpokenCoachCard } from "../../components/SpokenCoachCard";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export default function Conversation() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, autostart } = useLocalSearchParams<{
+    id: string;
+    autostart?: string;
+  }>();
   const app = useApp();
   const { state, setState, profile } = app;
   const latest = useRef(app);
@@ -55,6 +58,7 @@ export default function Conversation() {
   const requestAbort = useRef<AbortController | null>(null);
   const activeRequest = useRef<string | null>(null);
   const [showVoice, setShowVoice] = useState(false);
+  const didAutostart = useRef(false);
   function cancelLive() {
     requestAbort.current?.abort();
     const requestId = activeRequest.current;
@@ -294,6 +298,17 @@ export default function Conversation() {
       }
     }
   }
+  React.useEffect(() => {
+    if (didAutostart.current) return;
+    if (autostart !== "1") return;
+    if (!session || session.messages.length || !profile) return;
+    didAutostart.current = true;
+    void generate(
+      "start",
+      "I'm here. Help me take one small step to interact, in a way that fits how I communicate.",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autostart, session?.id, profile?.id, session?.messages.length]);
   async function read(m: Message) {
     try {
       const text = approvedSpokenText(
@@ -417,20 +432,26 @@ export default function Conversation() {
           <Icon name="location-outline" size={18} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: C.green }}>
             {state.scenes?.[id]
-              ? "GLASSES SCENE"
+              ? "PHONE SCENE"
               : session.scenarioId
                 ? "FICTIONAL DEMO ROOM"
-                : "YOUR DESCRIPTION"}
+                : "YOUR CONTEXT"}
           </Text>
         </View>
         <Body style={{ fontSize: 13 }}>{session.room}</Body>
         <Body style={s.small}>
           {state.scenes?.[id]
-            ? "This chat includes a reviewed Meta glasses still summary (provenance: meta_glasses). Mic and speaker use Bluetooth when glasses are the active headset. Read aloud routes to the current audio device."
+            ? "This chat includes a reviewed phone photo summary. Coaching matches your style card when available."
             : session.mode === "live"
-              ? "Your typed context is sent to the server. Only a response that passes the independent check is released."
+              ? "Your context is sent to the server. Only a response that passes the independent check is released — matched to how you speak when a style card exists."
               : "This is scripted practice with local rule checks. No live model is involved."}
         </Body>
+        {profile?.persona ? (
+          <Body style={s.small}>
+            Style: {profile.persona.tone.join(", ") || "natural"} ·{" "}
+            {profile.persona.pacing} pacing
+          </Body>
+        ) : null}
       </Card>
       {!profile && (
         <Card>

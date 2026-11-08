@@ -34,12 +34,10 @@ export function SpokenCoachCard({
   room,
   scene,
   sessionId,
-  glassesConnected = false,
 }: {
   room: string;
   scene?: SceneSummary;
   sessionId?: string;
-  glassesConnected?: boolean;
 }) {
   const { state, setState, profile, account, getState } = useApp();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -441,7 +439,7 @@ export function SpokenCoachCard({
     }
   }
 
-  const route = audioRouteLabel(audioRouteHint(glassesConnected));
+  const route = audioRouteLabel(audioRouteHint());
   const active = phase !== "idle" && phase !== "error" && phase !== "starting";
 
   return (
@@ -466,8 +464,8 @@ export function SpokenCoachCard({
         </Badge>
       </View>
       <Body muted>
-        Hold to talk through your glasses. StepIn drafts advice from the scene
-        and your style card, checks it fits you, then speaks only if it passes.
+        Hold to talk on your phone. StepIn drafts advice from the scene and your
+        style card, checks it fits you, then speaks only if it passes.
       </Body>
       <Body muted style={s.small}>
         {route}

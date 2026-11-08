@@ -86,7 +86,7 @@ export function AccountCard() {
         />
       </View>
       <Body style={s.small}>
-        Needed for Live talk on Meta glasses and optional clip transcription.
+        Needed for spoken coaching and optional clip transcription.
       </Body>
       <Button
         title={

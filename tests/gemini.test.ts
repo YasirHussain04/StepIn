@@ -302,7 +302,11 @@ describe("two Gemini coaching agents", () => {
     ])
       expect(() => readConfig({ [name]: "another-provider-model" })).toThrow();
     expect(
-      hasGeminiConsent({ ...INITIAL_STATE.settings, processingConsent: true }),
+      hasGeminiConsent({
+        ...INITIAL_STATE.settings,
+        processingConsent: true,
+        processingProvider: undefined,
+      }),
     ).toBe(false);
     expect(
       hasGeminiConsent({

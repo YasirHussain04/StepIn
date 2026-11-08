@@ -29,13 +29,13 @@ function systemInstruction(
         }`
       : "No personal screening answers are shared. Keep advice generic and gentle.";
   const sceneBits = scene
-    ? `Glasses stills summary (do not invent beyond this): eventKind=${scene.eventKind}; socialSetup=${scene.socialSetup}; focus=${scene.coachingFocus.join("; ")}; observations=${scene.observations.join("; ")}; activities=${scene.activities.join("; ")}; uncertainties=${scene.uncertainties.join("; ")}.`
-    : "No glasses scene summary was provided.";
+    ? `Phone photo summary (do not invent beyond this): eventKind=${scene.eventKind}; socialSetup=${scene.socialSetup}; focus=${scene.coachingFocus.join("; ")}; observations=${scene.observations.join("; ")}; activities=${scene.activities.join("; ")}; uncertainties=${scene.uncertainties.join("; ")}.`
+    : "No phone photo scene summary was provided.";
   return [
-    "You are StepIn Live, a brief spoken social coach for a neurodivergent person wearing Meta glasses.",
+    "You are StepIn Live, a brief spoken social coach for a neurodivergent person using their phone at a community gathering.",
     "Speak naturally in short turns. Prefer one clear next step or line they could say. Match persona tone/pacing when provided.",
     "Do not invent medical, legal, or crisis advice. If they sound in distress, encourage reaching a trusted person or local emergency help.",
-    "Never claim live camera vision beyond the provided stills summary.",
+    "Never claim live camera vision beyond the provided photo summary.",
     sceneBits,
     room ? `Room text: ${room}` : "No extra room text.",
     preferenceBits,

@@ -203,7 +203,7 @@ export const SceneSummarySchema = z
     ]),
     coachingFocus: z.array(z.string().trim().min(1).max(200)).max(3),
     model: z.string().max(80),
-    provenance: z.literal("meta_glasses"),
+    provenance: z.enum(["phone_camera", "meta_glasses"]),
   })
   .strict();
 export type SceneSummary = z.infer<typeof SceneSummarySchema>;

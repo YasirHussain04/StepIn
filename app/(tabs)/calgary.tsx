@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { router } from "expo-router";
 import {
   Badge,
   Body,
@@ -22,8 +23,10 @@ import {
 } from "../../components/ui";
 import { eventFormat, sortedEvents } from "../../src/data/events";
 import { useEvents } from "../../src/services/useEvents";
+import { useApp } from "../../src/state/AppProvider";
 export default function Calgary() {
   const feed = useEvents();
+  const { profile, setState } = useApp();
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [past, setPast] = useState(false);
@@ -45,14 +48,30 @@ export default function Calgary() {
       );
     }
   }
+  function coachFor(event: (typeof filtered)[number]) {
+    if (!profile) {
+      router.push("/quiz");
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      pendingEvent: {
+        id: event.id,
+        title: event.title,
+        location: event.location,
+        note: event.note,
+      },
+    }));
+    router.push("/");
+  }
   return (
     <Page>
       <View style={{ gap: 12 }}>
         <Label>Find your people, Calgary</Label>
         <Title>Something to{"\n"}look forward to.</Title>
         <Body muted>
-          Discover a reason to step out. Start with a place or activity that
-          feels like you.
+          Pick something to look forward to, then coach yourself through showing
+          up — photo optional, advice tailored to you.
         </Body>
       </View>
       <Body style={s.small}>
@@ -205,6 +224,11 @@ export default function Calgary() {
                 Confirm registration, pricing and accessibility with the
                 organizer before going.
               </Body>
+              <Button
+                title="Coach me for this"
+                icon="sparkles-outline"
+                onPress={() => coachFor(event)}
+              />
               <Button
                 secondary
                 title="Details & registration"

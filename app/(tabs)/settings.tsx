@@ -16,7 +16,6 @@ import {
   Title,
 } from "../../components/ui";
 import { Confirm } from "../../components/Confirm";
-import { GlassesPanel } from "../../components/GlassesPanel";
 import { useApp } from "../../src/state/AppProvider";
 import { createProfile, comfortLabel, preference } from "../../src/domain/quiz";
 import { Settings } from "../../src/domain/types";
@@ -286,10 +285,8 @@ export default function Preferences() {
           <Body style={s.small}>
             The in-app recorder keeps temporary audio on this device. Only your
             explicit transcription action uploads it to StepIn and Google; the
-            server does not durably store the audio. Keyboard and browser
-            dictation use their own providers. Glasses stills upload only after
-            you review and send them for scene analysis; phone camera is not
-            used as a product fallback.
+            server does not durably store the audio. Scene photos upload only
+            after you review and analyze them for coaching context.
           </Body>
           <Button
             secondary
@@ -305,28 +302,16 @@ export default function Preferences() {
           />
         </Card>
       </View>
-      <GlassesPanel />
-      <Card>
-        <View style={s.row}>
-          <Icon name="headset-outline" />
-          <Text style={s.section}>Glasses mic & speaker</Text>
-        </View>
-        <Body muted>
-          Mic and speaker use system Bluetooth (HFP for recording, A2DP when
-          only playing). Keep Meta glasses connected as a headset; the Speak
-          recorder and Read aloud then use them automatically. While the mic is
-          active, playback is call quality. Camera stills need a development
-          build — Expo Go cannot load the Meta DAT native module.
-        </Body>
-      </Card>
       <View style={{ alignItems: "center", gap: 6 }}>
         <Text style={{ color: C.green, fontWeight: "700" }}>
-          StepIn · 0.2.0
+          StepIn · 0.3.0 · Expo Go
         </Text>
-        <Body style={s.small}>A small step toward feeling at home.</Body>
+        <Body style={s.small}>
+          A coach for stepping into the outside world — at your pace.
+        </Body>
         <Badge>
           {state.settings.mode === "live"
-            ? "LIVE GUIDANCE · ACCOUNT SYNC"
+            ? "LIVE GUIDANCE · PHONE"
             : "OFFLINE DEMO AVAILABLE"}
         </Badge>
       </View>

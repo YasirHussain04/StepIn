@@ -81,8 +81,15 @@ export type AppState = {
   activeProfileId: string | null;
   draft: { answers: Answers; step: number } | null;
   sessions: Session[];
-  /** Local-only glasses scene summaries keyed by session id — never synced. */
+  /** Local-only scene summaries keyed by session id — never synced. */
   scenes?: Record<string, import("../../shared/contracts").SceneSummary>;
+  /** Event the user picked in Calgary to coach for next. */
+  pendingEvent?: {
+    id: string;
+    title: string;
+    location: string;
+    note: string;
+  } | null;
   settings: Settings;
   ownerId?: string | null;
   cloud?: {
@@ -101,16 +108,18 @@ export const INITIAL_STATE: AppState = {
   draft: null,
   sessions: [],
   scenes: {},
+  pendingEvent: null,
   settings: {
     history: true,
     affirmations: true,
     rate: 0.9,
     audio: true,
     interests: "",
-    mode: "demo",
+    mode: "live",
     shareProfile: true,
-    processingConsent: false,
-    voiceConsent: false,
+    processingConsent: true,
+    processingProvider: "gemini",
+    voiceConsent: true,
   },
 };
 export function uid() {

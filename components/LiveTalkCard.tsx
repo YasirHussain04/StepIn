@@ -21,10 +21,8 @@ type Phase =
 
 export function LiveTalkCard({
   room,
-  glassesConnected = false,
 }: {
   room?: string;
-  glassesConnected?: boolean;
 }) {
   const { state, profile } = useApp();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -172,7 +170,7 @@ export function LiveTalkCard({
     setPhase("speaking");
   }
 
-  const route = audioRouteLabel(audioRouteHint(glassesConnected));
+  const route = audioRouteLabel(audioRouteHint());
   const active = phase === "ready" || phase === "listening" || phase === "speaking";
 
   return (

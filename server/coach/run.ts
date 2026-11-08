@@ -84,6 +84,7 @@ export class Coach {
             communication: profile.answers.q8,
             access: profile.answers.q9,
             support: profile.answers.q10,
+            ...(profile.persona ? { persona: profile.persona } : {}),
           }
         : null,
       request: request.message,
@@ -286,7 +287,9 @@ export class Coach {
           "audit",
         );
       signal.throwIfAborted();
-      await this.store.assertProfile(userId, profile.id);
+      // Local-device coaching already validated localProfile above; skip cloud store.
+      if (request.history || !request.localProfile)
+        await this.store.assertProfile(userId, profile.id);
       const response: CoachResponse = {
         requestId: request.requestId,
         status: clarification ? "clarification" : "approved",
@@ -301,7 +304,7 @@ export class Coach {
             : [
                 ...draft.observations.map((o) =>
                   request.scene
-                    ? `From your glasses still: ${o}`
+                    ? `From your photo: ${o}`
                     : `From your description: ${o}`,
                 ),
                 draft.reply,

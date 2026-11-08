@@ -25,6 +25,7 @@ import {
 } from "../src/domain/quiz";
 import { hasGeminiConsent, type Answers, type Persona } from "../src/domain/types";
 import { api, ClientError } from "../src/services/api";
+import { withLiveAi } from "../src/services/enableLiveAi";
 import type { QuizTurnResponse } from "../shared/contracts";
 
 type ChatMsg = { role: "assistant" | "user"; text: string };
@@ -303,12 +304,16 @@ function ConversationQuiz({ onSwitch }: { onSwitch: () => void }) {
   if (!hasGeminiConsent(state.settings)) {
     return (
       <Page>
-        <Title small>Allow live AI first</Title>
+        <Title small>Turn on live AI for this quiz</Title>
         <Body muted>
-          The conversational quiz uses Gemini on your StepIn server. Turn on
-          live AI processing in Settings, or use the classic form offline.
+          The conversational quiz uses Gemini on your StepIn server so it can
+          learn how you speak. You can also use the classic form offline.
         </Body>
-        <Button title="Open Settings" onPress={() => router.push("/settings")} />
+        <Button
+          title="Allow live AI and continue"
+          icon="sparkles-outline"
+          onPress={() => setState((prev) => withLiveAi(prev))}
+        />
         <Button secondary title="Use classic form" onPress={onSwitch} />
       </Page>
     );

@@ -7,7 +7,7 @@ export type AgentInput = {
   action: string;
   history: { role: string; text: string }[];
   affirmations: boolean;
-  /** Glasses-derived scene evidence; never treat typed room text as camera data. */
+  /** Phone photo scene evidence; never treat typed room text as camera data. */
   scene: SceneSummary | null;
 };
 export interface Agents {

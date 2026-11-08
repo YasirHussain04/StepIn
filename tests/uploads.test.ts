@@ -79,7 +79,7 @@ const scene: SceneSummary = {
   socialSetup: "small_group",
   coachingFocus: ["Ask about joining"],
   model: "test",
-  provenance: "meta_glasses",
+  provenance: "phone_camera",
 };
 const transcribe = vi.fn(async (bytes: Buffer, mime: string) => {
   expect(bytes.subarray(4, 8).toString()).toBe("ftyp");
