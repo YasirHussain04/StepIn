@@ -11,8 +11,7 @@
       "bundleIdentifier": "ca.stepin.mobile"
     },
     "android": {
-      "package": "ca.stepin.mobile",
-      "blockedPermissions": ["android.permission.CAMERA"]
+      "package": "ca.stepin.mobile"
     },
     "web": {
       "bundler": "metro",
@@ -32,7 +31,15 @@
           "enableBackgroundPlayback": false
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-dev-client",
+      [
+        "expo-meta-wearables-dat",
+        {
+          "urlScheme": "stepin",
+          "bluetoothUsageDescription": "StepIn uses Bluetooth to connect to Meta glasses for microphone, speaker, and camera stills."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
