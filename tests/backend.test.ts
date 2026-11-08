@@ -651,11 +651,13 @@ describe("authenticated API and fail-closed agent coordination", () => {
       transcriber,
     });
     const boundary = "stepin-test-boundary";
+    const m4aBytes = Buffer.alloc(128, 0);
+    m4aBytes.write("ftyp", 4, "ascii");
     const payload = Buffer.concat([
       Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="voice.m4a"\r\nContent-Type: audio/mp4\r\n\r\n`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="voice.m4a"\r\nContent-Type: audio/m4a\r\n\r\n`,
       ),
-      Buffer.alloc(128, 1),
+      m4aBytes,
       Buffer.from(`\r\n--${boundary}--\r\n`),
     ]);
     const audioHeaders = {
@@ -697,11 +699,19 @@ describe("authenticated API and fail-closed agent coordination", () => {
     expect(result.json().text).toBe("Hello there");
     expect(seen).not.toBeNull();
     expect((seen as unknown as Buffer).every((v) => v === 0)).toBe(true);
+    expect(transcriber.transcribe).toHaveBeenLastCalledWith(
+      expect.any(Buffer),
+      "audio/m4a",
+      expect.any(AbortSignal),
+    );
+    const wavBytes = Buffer.alloc(128, 0);
+    wavBytes.write("RIFF", 0, "ascii");
+    wavBytes.write("WAVE", 8, "ascii");
     const octetPayload = Buffer.concat([
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="voice.wav"\r\nContent-Type: application/octet-stream\r\n\r\n`,
       ),
-      Buffer.alloc(128, 3),
+      wavBytes,
       Buffer.from(`\r\n--${boundary}--\r\n`),
     ]);
     const octet = await app.inject({
@@ -721,6 +731,25 @@ describe("authenticated API and fail-closed agent coordination", () => {
       "audio/wav",
       expect.any(AbortSignal),
     );
+    const junkPayload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="voice.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
+      ),
+      Buffer.alloc(128, 3),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const junk = await app.inject({
+      method: "POST",
+      url: "/api/transcribe",
+      headers: {
+        ...headers,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        "x-audio-consent": "true",
+        "x-recording-duration": "2",
+      },
+      payload: junkPayload,
+    });
+    expect(junk.statusCode).toBe(415);
     await app.close();
   });
   it("rejects forged assistant messages and incomplete activation payloads before storage", async () => {

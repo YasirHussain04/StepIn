@@ -72,6 +72,8 @@ export function GlassesPanelNative({
   const [error, setError] = useState("");
   const [still, setStill] = useState<CapturedStill | null>(null);
   const pendingPhoto = useRef(false);
+  const sessionInFlight = useRef(false);
+  const sessionIdRef = useRef<string | null>(null);
   const stillReady = useRef(onStillReady);
   stillReady.current = onStillReady;
 
@@ -108,6 +110,19 @@ export function GlassesPanelNative({
       setError("The glasses camera stream stopped. Retry capture or reconnect.");
       setBusy("");
       pendingPhoto.current = false;
+    },
+    onDeviceSessionStateChange: (id, state) => {
+      if (state === "stopped" && sessionIdRef.current === id) {
+        sessionIdRef.current = null;
+        setSessionId(null);
+      }
+    },
+    onDeviceSessionError: (_id, _code, message) => {
+      const detail = (message ?? "").trim();
+      if (detail)
+        setError(
+          `Glasses session error: ${detail}. Confirm glasses are worn, unfolded, and linked.`,
+        );
     },
   });
 
@@ -177,6 +192,7 @@ export function GlassesPanelNative({
   }, [registered, requestPermission]);
 
   const beginSession = useCallback(async () => {
+    if (sessionInFlight.current || busy) return;
     if (!registered) {
       setError("Register with Meta AI before starting a camera session.");
       return;
@@ -185,9 +201,21 @@ export function GlassesPanelNative({
       setError("Allow glasses camera in Meta AI before starting a session.");
       return;
     }
+    sessionInFlight.current = true;
     setError("");
     setBusy("Finding an eligible glasses device…");
+    let createdId: string | null = null;
     try {
+      const prior = sessionIdRef.current;
+      if (prior) {
+        try {
+          await stopSession(prior);
+        } catch {
+          /* prior session may already be gone */
+        }
+        sessionIdRef.current = null;
+        setSessionId(null);
+      }
       const { eligible, list } = await waitForEligible();
       if (!eligible) {
         setError(
@@ -196,15 +224,24 @@ export function GlassesPanelNative({
         return;
       }
       setBusy(`Starting session on ${eligible.name || eligible.deviceType}…`);
-      const id = await createSession(eligible.identifier);
+      // Auto device selector — SpecificDeviceSelector often stops before start.
+      const id = await createSession();
+      createdId = id;
       await startSession(id);
       await addStreamToSession(id, {
         resolution: "medium",
         frameRate: 24,
-        deviceId: eligible.identifier,
       });
+      sessionIdRef.current = id;
       setSessionId(id);
     } catch (e) {
+      if (createdId) {
+        try {
+          await stopSession(createdId);
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
       const detail = errorDetail(e, "Could not start a glasses session.");
       const snapshot = devices
         .map(
@@ -215,16 +252,20 @@ export function GlassesPanelNative({
       setError(
         `${detail}${snapshot ? ` [${snapshot}]` : ""} Confirm glasses are worn, unfolded, linked in Meta AI, and DAT/Developer Mode install finished.`,
       );
+      sessionIdRef.current = null;
       setSessionId(null);
     } finally {
+      sessionInFlight.current = false;
       setBusy("");
     }
   }, [
+    busy,
     registered,
     permissionStatus,
     waitForEligible,
     createSession,
     startSession,
+    stopSession,
     addStreamToSession,
     devices,
   ]);
@@ -237,6 +278,7 @@ export function GlassesPanelNative({
     } catch {
       /* session may already be stopped */
     } finally {
+      sessionIdRef.current = null;
       setSessionId(null);
       setBusy("");
     }
@@ -332,7 +374,13 @@ export function GlassesPanelNative({
             title="Start camera session"
             icon="play-outline"
             onPress={() => void beginSession()}
-            disabled={!registered}
+            disabled={!registered || !!busy}
+            busy={
+              !!busy &&
+              (busy.startsWith("Finding") ||
+                busy.startsWith("Starting") ||
+                busy.startsWith("Waiting for glasses"))
+            }
           />
         ) : (
           <>

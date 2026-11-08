@@ -18,7 +18,7 @@ const schema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   CONVERSATION_MODEL: geminiModel("gemini-3.8-flash"),
   AUDIT_MODEL: geminiModel("gemini-3.8-flash"),
-  TRANSCRIPTION_MODEL: geminiModel("gemini-3.8-flash"),
+  TRANSCRIPTION_MODEL: geminiModel("gemini-2.5-flash"),
   SCENE_MODEL: geminiModel("gemini-3.8-flash"),
   LIVE_MODEL: geminiModel("gemini-2.5-flash-native-audio-preview-09-2025"),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(90000).default(35000),

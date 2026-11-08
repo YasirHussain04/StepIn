@@ -26,6 +26,7 @@ import {
   AUDIO_TYPES,
   GeminiTranscriber,
   normalizeAudioMime,
+  sniffAudioMime,
   Transcriber,
 } from "./providers/transcription";
 import {
@@ -686,17 +687,11 @@ export async function buildApp(
           400,
         );
       const rawMime = file.mimetype.split(";")[0].toLowerCase();
-      const mime = normalizeAudioMime(rawMime, file.filename);
-      if (!AUDIO_TYPES.has(rawMime) && !AUDIO_TYPES.has(mime))
+      const declared = normalizeAudioMime(rawMime, file.filename);
+      if (!AUDIO_TYPES.has(rawMime) && !AUDIO_TYPES.has(declared))
         throw new ApiError(
           "UNSUPPORTED_AUDIO",
           "This audio format is unsupported.",
-          415,
-        );
-      if (mime === "application/octet-stream")
-        throw new ApiError(
-          "UNSUPPORTED_AUDIO",
-          "Could not detect the recording format. Retry spoken coaching or type instead.",
           415,
         );
       const buffer = await file.toBuffer();
@@ -705,6 +700,13 @@ export async function buildApp(
           "INVALID_AUDIO",
           "The recording is empty or too large.",
           400,
+        );
+      const mime = sniffAudioMime(buffer);
+      if (!mime)
+        throw new ApiError(
+          "UNSUPPORTED_AUDIO",
+          "Could not detect a supported audio container (wav/m4a/webm/mp3). Retry spoken coaching or type instead.",
+          415,
         );
       const abort = new AbortController();
       const disconnect = () => {
