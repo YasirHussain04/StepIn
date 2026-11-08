@@ -697,6 +697,30 @@ describe("authenticated API and fail-closed agent coordination", () => {
     expect(result.json().text).toBe("Hello there");
     expect(seen).not.toBeNull();
     expect((seen as unknown as Buffer).every((v) => v === 0)).toBe(true);
+    const octetPayload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="voice.wav"\r\nContent-Type: application/octet-stream\r\n\r\n`,
+      ),
+      Buffer.alloc(128, 3),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const octet = await app.inject({
+      method: "POST",
+      url: "/api/transcribe",
+      headers: {
+        ...headers,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        "x-audio-consent": "true",
+        "x-recording-duration": "2",
+      },
+      payload: octetPayload,
+    });
+    expect(octet.statusCode).toBe(200);
+    expect(transcriber.transcribe).toHaveBeenLastCalledWith(
+      expect.any(Buffer),
+      "audio/wav",
+      expect.any(AbortSignal),
+    );
     await app.close();
   });
   it("rejects forged assistant messages and incomplete activation payloads before storage", async () => {

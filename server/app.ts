@@ -25,6 +25,7 @@ import { GeminiAgents } from "./providers/gemini";
 import {
   AUDIO_TYPES,
   GeminiTranscriber,
+  normalizeAudioMime,
   Transcriber,
 } from "./providers/transcription";
 import {
@@ -684,11 +685,18 @@ export async function buildApp(
           "Record a voice message first.",
           400,
         );
-      const mime = file.mimetype.split(";")[0].toLowerCase();
-      if (!AUDIO_TYPES.has(mime))
+      const rawMime = file.mimetype.split(";")[0].toLowerCase();
+      const mime = normalizeAudioMime(rawMime, file.filename);
+      if (!AUDIO_TYPES.has(rawMime) && !AUDIO_TYPES.has(mime))
         throw new ApiError(
           "UNSUPPORTED_AUDIO",
           "This audio format is unsupported.",
+          415,
+        );
+      if (mime === "application/octet-stream")
+        throw new ApiError(
+          "UNSUPPORTED_AUDIO",
+          "Could not detect the recording format. Retry spoken coaching or type instead.",
           415,
         );
       const buffer = await file.toBuffer();

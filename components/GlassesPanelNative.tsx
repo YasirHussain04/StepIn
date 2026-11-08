@@ -3,6 +3,7 @@ import { Image, View } from "react-native";
 import {
   useMetaWearables,
   EMWDATStreamView,
+  type Device,
   type PhotoData,
 } from "expo-meta-wearables-dat";
 import { Badge, Body, Button, C, Card, Icon, s } from "./ui";
@@ -35,6 +36,30 @@ function registrationLabel(state: string) {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function pickEligible(list: Device[]): Device | undefined {
+  return list.find(
+    (d) => d.linkState === "connected" && d.compatibility === "compatible",
+  );
+}
+
+function compatibilityHint(device: Device | undefined, list: Device[]) {
+  const linked = list.filter((d) => d.linkState === "connected");
+  if (!linked.length)
+    return "No linked glasses yet. Wear them unfolded and reconnect in Meta AI.";
+  const sample = device ?? linked[0];
+  if (sample.compatibility === "deviceUpdateRequired")
+    return "Glasses firmware update required in Meta AI before camera sessions work.";
+  if (sample.compatibility === "sdkUpdateRequired")
+    return "Rebuild StepIn with a newer expo-meta-wearables-dat — SDK update required.";
+  if (sample.compatibility === "undefined")
+    return "Glasses are linked but compatibility is still undefined — wait a few seconds for the DAT handshake, or finish the on-glasses Developer Mode install.";
+  return `Linked as ${sample.name || sample.deviceType} (${sample.linkState}, ${sample.compatibility}).`;
+}
+
 export function GlassesPanelNative({
   onStillReady,
   onConnectedChange,
@@ -58,6 +83,7 @@ export function GlassesPanelNative({
     devices,
     startRegistration,
     requestPermission,
+    refreshDevices,
     createSession,
     startSession,
     stopSession,
@@ -96,6 +122,22 @@ export function GlassesPanelNative({
     if (registrationState === "registering")
       setBusy("Waiting for Meta AI approval…");
   }, [registrationState]);
+
+  const waitForEligible = useCallback(async () => {
+    let list = await refreshDevices();
+    let eligible = pickEligible(list);
+    if (eligible) return { eligible, list };
+    for (let i = 0; i < 4; i++) {
+      setBusy("Waiting for glasses DAT handshake…");
+      await sleep(700);
+      list = await refreshDevices();
+      eligible = pickEligible(list);
+      if (eligible) return { eligible, list };
+      const linked = list.find((d) => d.linkState === "connected");
+      if (linked && linked.compatibility !== "undefined") break;
+    }
+    return { eligible: pickEligible(list), list };
+  }, [refreshDevices]);
 
   const register = useCallback(async () => {
     setError("");
@@ -139,22 +181,53 @@ export function GlassesPanelNative({
       setError("Register with Meta AI before starting a camera session.");
       return;
     }
+    if (permissionStatus !== "granted") {
+      setError("Allow glasses camera in Meta AI before starting a session.");
+      return;
+    }
     setError("");
-    setBusy("Starting glasses session…");
+    setBusy("Finding an eligible glasses device…");
     try {
-      const id = await createSession();
+      const { eligible, list } = await waitForEligible();
+      if (!eligible) {
+        setError(
+          `No eligible device available. ${compatibilityHint(undefined, list)} Wear glasses unfolded, finish Developer Mode install if pending, then retry.`,
+        );
+        return;
+      }
+      setBusy(`Starting session on ${eligible.name || eligible.deviceType}…`);
+      const id = await createSession(eligible.identifier);
       await startSession(id);
-      await addStreamToSession(id, { resolution: "medium", frameRate: 15 });
+      await addStreamToSession(id, {
+        resolution: "medium",
+        frameRate: 24,
+        deviceId: eligible.identifier,
+      });
       setSessionId(id);
     } catch (e) {
+      const detail = errorDetail(e, "Could not start a glasses session.");
+      const snapshot = devices
+        .map(
+          (d) =>
+            `${d.name || d.deviceType}:${d.linkState}/${d.compatibility}`,
+        )
+        .join(", ");
       setError(
-        `${errorDetail(e, "Could not start a glasses session.")} Confirm the glasses are worn, unfolded, and linked in Meta AI.`,
+        `${detail}${snapshot ? ` [${snapshot}]` : ""} Confirm glasses are worn, unfolded, linked in Meta AI, and DAT/Developer Mode install finished.`,
       );
       setSessionId(null);
     } finally {
       setBusy("");
     }
-  }, [registered, createSession, startSession, addStreamToSession]);
+  }, [
+    registered,
+    permissionStatus,
+    waitForEligible,
+    createSession,
+    startSession,
+    addStreamToSession,
+    devices,
+  ]);
 
   const endSession = useCallback(async () => {
     if (!sessionId) return;
@@ -228,7 +301,8 @@ export function GlassesPanelNative({
       ) : null}
       {devices.map((device) => (
         <Body key={device.identifier} style={s.small}>
-          {device.name || device.deviceType} · {device.linkState}
+          {device.name || device.deviceType} · {device.linkState} ·{" "}
+          {device.compatibility}
         </Body>
       ))}
       {error ? <Body style={{ color: C.danger }}>{error}</Body> : null}
@@ -239,7 +313,9 @@ export function GlassesPanelNative({
             title="Register with Meta AI"
             icon="link-outline"
             onPress={register}
-            busy={registrationState === "registering" || busy === "Opening Meta AI…"}
+            busy={
+              registrationState === "registering" || busy === "Opening Meta AI…"
+            }
           />
         ) : null}
         {permissionStatus !== "granted" ? (
@@ -255,7 +331,7 @@ export function GlassesPanelNative({
           <Button
             title="Start camera session"
             icon="play-outline"
-            onPress={beginSession}
+            onPress={() => void beginSession()}
             disabled={!registered}
           />
         ) : (
@@ -313,7 +389,7 @@ export function GlassesPanelNative({
       <Body style={s.small}>
         Developer Mode: Meta AI → Settings → App Info → tap version 7×, toggle
         off→on. Local testing uses APPLICATION_ID/CLIENT_TOKEN 0 — no Meta
-        developer account required.
+        developer account required. Camera needs compatibility: compatible.
       </Body>
     </Card>
   );

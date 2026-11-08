@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 import { apiBase, ClientError } from "./api";
 import { bearerAuthHeader } from "./authHeaders";
+import { recordingUploadMeta } from "./recordingPresets";
+
 export async function transcribeClip(
   uri: string,
   duration: number,
@@ -8,6 +10,7 @@ export async function transcribeClip(
   signal: AbortSignal,
 ): Promise<string> {
   const form = new FormData();
+  const meta = recordingUploadMeta(uri);
   if (Platform.OS === "web") {
     const clip = await fetch(uri).then((r) => r.blob());
     if (clip.size > 4 * 1024 * 1024)
@@ -15,12 +18,12 @@ export async function transcribeClip(
         "TOO_LARGE",
         "Record a shorter message (up to 45 seconds).",
       );
-    form.append("audio", clip, "voice.webm");
+    form.append("audio", clip, meta.name);
   } else
     form.append("audio", {
       uri,
-      name: "voice.m4a",
-      type: "audio/mp4",
+      name: meta.name,
+      type: meta.type,
     } as unknown as Blob);
   const response = await fetch(`${apiBase(url)}/api/transcribe`, {
     method: "POST",

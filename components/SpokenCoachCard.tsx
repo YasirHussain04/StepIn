@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
 import {
   AudioModule,
-  RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
+import { TRANSCRIBE_WAV_PRESET } from "../src/services/recordingPresets";
 import * as Speech from "expo-speech";
 import { Badge, Body, Button, C, Card, Icon, s } from "./ui";
 import { useApp } from "../src/state/AppProvider";
@@ -39,7 +39,7 @@ export function SpokenCoachCard({
   const holding = useRef(false);
   const abort = useRef<AbortController | null>(null);
   const chatId = useRef(sessionId ?? uid());
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder(TRANSCRIBE_WAV_PRESET);
   const recording = useAudioRecorderState(recorder, 200);
 
   useEffect(() => {
@@ -106,7 +106,7 @@ export function SpokenCoachCard({
     setError("");
     try {
       await recorder.prepareToRecordAsync({
-        ...RecordingPresets.HIGH_QUALITY,
+        ...TRANSCRIBE_WAV_PRESET,
         directory: "cache",
         fileName: `stepin-spoken-${Date.now()}`,
       });

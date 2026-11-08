@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, View } from "react-native";
 import {
   AudioModule,
-  RecordingPresets,
   setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
+import { TRANSCRIBE_WAV_PRESET } from "../src/services/recordingPresets";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import { Body, Button, C, s } from "./ui";
@@ -23,7 +23,7 @@ export function VoiceRecorder({
   disabled?: boolean;
 }) {
   const { state, setState } = useApp();
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder(TRANSCRIBE_WAV_PRESET);
   const recording = useAudioRecorderState(recorder, 200);
   const player = useAudioPlayer(null);
   const playback = useAudioPlayerStatus(player);
@@ -144,7 +144,7 @@ export function VoiceRecorder({
         shouldPlayInBackground: false,
       });
       await recorder.prepareToRecordAsync({
-        ...RecordingPresets.HIGH_QUALITY,
+        ...TRANSCRIBE_WAV_PRESET,
         directory: "cache",
         fileName: `stepin-voice-${Date.now()}`,
       });
