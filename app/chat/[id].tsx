@@ -200,6 +200,7 @@ export default function Conversation() {
         requestAbort.current = new AbortController();
         activeRequest.current = user.requestId!;
         setPhase("Drafting and independently checking your idea…");
+        const scene = stateNow.scenes?.[id];
         const result = await liveCoach(
           {
             requestId: user.requestId!,
@@ -213,6 +214,7 @@ export default function Conversation() {
             affirmations: stateNow.settings.affirmations,
             processingConsent: true,
             processingProvider: "gemini",
+            ...(scene ? { scene } : {}),
             ...(history
               ? {}
               : {
@@ -404,14 +406,20 @@ export default function Conversation() {
         <View style={s.row}>
           <Icon name="location-outline" size={18} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: C.green }}>
-            {session.scenarioId ? "FICTIONAL DEMO ROOM" : "YOUR DESCRIPTION"}
+            {state.scenes?.[id]
+              ? "GLASSES SCENE"
+              : session.scenarioId
+                ? "FICTIONAL DEMO ROOM"
+                : "YOUR DESCRIPTION"}
           </Text>
         </View>
         <Body style={{ fontSize: 13 }}>{session.room}</Body>
         <Body style={s.small}>
-          {session.mode === "live"
-            ? "Your typed context is sent to the server. Only a response that passes the independent check is released. No camera is involved."
-            : "This is scripted practice with local rule checks. No live model or camera is involved."}
+          {state.scenes?.[id]
+            ? "This chat includes a reviewed Meta glasses still summary (provenance: meta_glasses). Mic and speaker use Bluetooth when glasses are the active headset. Read aloud routes to the current audio device."
+            : session.mode === "live"
+              ? "Your typed context is sent to the server. Only a response that passes the independent check is released."
+              : "This is scripted practice with local rule checks. No live model is involved."}
         </Body>
       </Card>
       {!profile && (
