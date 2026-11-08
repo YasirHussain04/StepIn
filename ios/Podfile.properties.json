@@ -1,7 +1,5 @@
 {
   "expo.jsEngine": "hermes",
   "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",
-  "expo.inlineModules.watchedDirectories": "[]",
-  "expo.inlineModules.xcodeProjectTargets": "{\"mainTarget\":\"StepIn\",\"targets\":[]}",
-  "ios.deploymentTarget": "16.0"
+  "ios.deploymentTarget": "16.4"
 }
