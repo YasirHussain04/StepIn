@@ -1,6 +1,20 @@
 # StepIn
 
-A lightweight Expo mobile app for newcomers finding a comfortable way to join community activities. Four tabs provide **Speak, Chats, Calgary and Settings**. Version 0.2 adds a Fastify backend, Supabase accounts and optional sync, independently reviewed live guidance, in-app recording/transcription, and organizer event refreshes. Meta glasses are the next track and are not implemented.
+A lightweight Expo mobile app for newcomers finding a comfortable way to join community activities. Four tabs provide **Speak, Chats, Calgary and Settings**. Version 0.2 adds a Fastify backend, Supabase accounts and optional sync, independently reviewed live guidance, in-app recording/transcription, and organizer event refreshes. Meta glasses mic/speaker (Bluetooth) and camera stills (Wearables DAT in a development build) are supported without a Meta Wearables Developer Center account when Meta AI Developer Mode is enabled.
+
+## Meta glasses (development build)
+
+Expo Go cannot load the Meta DAT native module. Use a custom build:
+
+```sh
+npm run prebuild
+npm run run:android   # or npm run run:ios
+```
+
+1. Pair Ray-Ban / Meta glasses in the **Meta AI** app.
+2. Enable **Developer Mode**: Meta AI → Settings → App Info → tap the version number five times.
+3. In StepIn: **Register with Meta AI**, allow camera, start a camera session, capture a still, review, then send for Gemini scene context.
+4. Mic and speaker use system Bluetooth (HFP/A2DP) with the existing recorder and Read aloud — no Meta developer project IDs required for local testing (`APPLICATION_ID` / `CLIENT_TOKEN` stay unset / `0`).
 
 ## Run locally
 
@@ -69,7 +83,7 @@ For the exact live-mode controls and hosted API/frontend setup, follow [DEPLOYME
 
 `npm run server` (or its alias `npm run backend`) starts the API; `npm run server:watch` reloads during development. Run it as a persistent Node process with `npm ci` dependencies installed. The TypeScript runtime is included in development dependencies, so do not omit them for this launch command. Supply server secrets through the host's environment, set `NODE_ENV=production`, configure HTTPS through the host/reverse proxy, set `HOST`/`PORT`, and list your actual web origin in `CORS_ORIGINS`. Point Expo's public API URL at that HTTPS address before exporting. Never serve the workspace or its `.env` as a static directory.
 
-Health is public at `GET /health`; events at `GET /api/events`. Authenticated routes cover sync, profiles/revisions/activation, paginated sessions/messages/audits, coaching/cancellation, transcription and account deletion. Fastify applies body limits, validation, explicit CORS and rate limits. Request bodies, tokens, audio and draft reasoning are not routinely logged.
+Health is public at `GET /health`; events at `GET /api/events`. Authenticated routes cover sync, profiles/revisions/activation, paginated sessions/messages/audits, coaching/cancellation, transcription, glasses scene analysis (`POST /api/scene`), and account deletion. Fastify applies body limits, validation, explicit CORS and rate limits. Request bodies, tokens, audio and draft reasoning are not routinely logged.
 
 The MVP is designed for one backend process: cancellation/session locks, transient chats and rate limits are process-local. A multi-instance deployment needs shared coordination and a shared event cache. Production provisioning, email deliverability, backup retention and host monitoring remain deployment work.
 
