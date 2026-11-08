@@ -8,7 +8,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ca.stepin.mobile"
+      "bundleIdentifier": "ca.stepin.mobile",
+      "deploymentTarget": "16.4"
     },
     "android": {
       "package": "ca.stepin.mobile"
