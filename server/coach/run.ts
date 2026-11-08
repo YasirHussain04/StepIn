@@ -98,6 +98,7 @@ export class Coach {
             .slice(0, 3000),
         })),
       affirmations: request.affirmations,
+      scene: request.scene ?? null,
     };
   }
   private hardChecks(draft: Draft, profile: Profile, request: CoachRequest) {
@@ -278,7 +279,11 @@ export class Coach {
           text: clarification
             ? "What activity or welcome sign can you directly see, and what would you like help with?"
             : [
-                ...draft.observations.map((o) => `From your description: ${o}`),
+                ...draft.observations.map((o) =>
+                  request.scene
+                    ? `From your glasses still: ${o}`
+                    : `From your description: ${o}`,
+                ),
                 draft.reply,
                 draft.opportunity,
               ]

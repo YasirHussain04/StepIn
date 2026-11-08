@@ -22,6 +22,11 @@ import {
   GeminiTranscriber,
   Transcriber,
 } from "./providers/transcription";
+import {
+  GeminiSceneAnalyzer,
+  IMAGE_TYPES,
+  SceneAnalyzer,
+} from "./providers/scene";
 import { EventService } from "./events";
 
 declare module "fastify" {
@@ -35,6 +40,7 @@ export async function buildApp(
     store?: Store;
     agents?: Agents;
     transcriber?: Transcriber;
+    sceneAnalyzer?: SceneAnalyzer;
     events?: EventService;
   } = {},
 ) {
@@ -51,6 +57,7 @@ export async function buildApp(
     config,
   );
   const transcriber = deps.transcriber ?? new GeminiTranscriber(config);
+  const sceneAnalyzer = deps.sceneAnalyzer ?? new GeminiSceneAnalyzer(config);
   const events = deps.events ?? new EventService(config);
   const running = new Map<string, AbortController>();
   const activeSessions = new Set<string>();
@@ -62,12 +69,13 @@ export async function buildApp(
       "authorization",
       "content-type",
       "x-audio-consent",
+      "x-image-consent",
       "x-recording-duration",
     ],
   });
   await app.register(rateLimit, { max: 90, timeWindow: "1 minute" });
   await app.register(multipart, {
-    limits: { fileSize: 4 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
+    limits: { fileSize: 4 * 1024 * 1024, files: 3, fields: 0, parts: 3 },
     throwFileSizeLimit: true,
   });
   app.addHook("preHandler", async (request) => {
@@ -124,13 +132,15 @@ export async function buildApp(
       ),
       coaching: !!config.GEMINI_API_KEY,
       transcription: !!config.GEMINI_API_KEY,
+      scene: !!config.GEMINI_API_KEY,
       events: true,
-      glasses: false,
+      glasses: true,
     },
     models: {
       conversation: config.CONVERSATION_MODEL,
       audit: config.AUDIT_MODEL,
       transcription: config.TRANSCRIPTION_MODEL,
+      scene: config.SCENE_MODEL,
     },
   }));
   app.get(
@@ -348,6 +358,70 @@ export async function buildApp(
     await store.fail(request.actor!.id, id);
     return { cancelled: true };
   });
+  app.post(
+    "/api/scene",
+    {
+      bodyLimit: 6 * 1024 * 1024 + 8192,
+      config: { rateLimit: { max: 6, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      if (request.headers["x-image-consent"] !== "true")
+        throw new ApiError(
+          "CONSENT_REQUIRED",
+          "Confirm sending glasses stills for scene analysis before uploading.",
+          403,
+        );
+      const frames: { bytes: Buffer; mimeType: string }[] = [];
+      const parts = request.files();
+      for await (const file of parts) {
+        if (frames.length >= 3)
+          throw new ApiError(
+            "SCENE_FRAME_LIMIT",
+            "Send at most 3 glasses stills.",
+            400,
+          );
+        const mime = file.mimetype.split(";")[0].toLowerCase();
+        if (!IMAGE_TYPES.has(mime))
+          throw new ApiError(
+            "UNSUPPORTED_IMAGE",
+            "Use JPEG or PNG stills from the glasses camera.",
+            415,
+          );
+        const buffer = await file.toBuffer();
+        if (buffer.length < 64 || file.file.truncated)
+          throw new ApiError(
+            "INVALID_IMAGE",
+            "A still is empty or too large (max 2 MB each).",
+            400,
+          );
+        frames.push({ bytes: buffer, mimeType: mime });
+      }
+      if (!frames.length)
+        throw new ApiError(
+          "IMAGE_REQUIRED",
+          "Capture and review a glasses still before sending.",
+          400,
+        );
+      const abort = new AbortController();
+      const disconnect = () => {
+        if (!reply.raw.writableEnded) abort.abort();
+      };
+      reply.raw.on("close", disconnect);
+      try {
+        const scene = await sceneAnalyzer.summarize(
+          frames,
+          AbortSignal.any([
+            abort.signal,
+            AbortSignal.timeout(config.AI_TIMEOUT_MS),
+          ]),
+        );
+        return { scene };
+      } finally {
+        for (const frame of frames) frame.bytes.fill(0);
+        reply.raw.off("close", disconnect);
+      }
+    },
+  );
   app.post(
     "/api/transcribe",
     {

@@ -18,6 +18,7 @@ const schema = z.object({
   CONVERSATION_MODEL: geminiModel,
   AUDIT_MODEL: geminiModel,
   TRANSCRIPTION_MODEL: geminiModel,
+  SCENE_MODEL: geminiModel,
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(90000).default(35000),
   CORS_ORIGINS: z
     .string()

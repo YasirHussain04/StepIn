@@ -19,6 +19,7 @@ const input: AgentInput = {
   action: "start",
   history: [],
   affirmations: false,
+  scene: null,
 };
 const draft: Draft = {
   observations: ["You described an open seat."],

@@ -576,6 +576,63 @@ describe("authenticated API and fail-closed agent coordination", () => {
     expect((await store.snapshot(USER_A)).sessions[0].messages).toHaveLength(0);
     await app.close();
   });
+  it("requires image consent for scene analysis and clears uploaded still buffers", async () => {
+    let seen: Buffer | null = null;
+    const sceneAnalyzer = {
+      summarize: vi.fn(async (frames: { bytes: Buffer }[]) => {
+        seen = frames[0].bytes;
+        return {
+          captureId: "sceneCaptureTest0000001",
+          observedAt: new Date().toISOString(),
+          observations: ["A welcome table is visible."],
+          activities: ["Board games"],
+          readableSigns: ["Welcome"],
+          uncertainties: [],
+          needsClarification: false,
+          model: "test-scene",
+          provenance: "meta_glasses" as const,
+        };
+      }),
+    };
+    const app = await buildApp(config(), {
+      store,
+      agents: fakeAgents(),
+      sceneAnalyzer,
+    });
+    const boundary = "stepin-scene-boundary";
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="still.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
+      ),
+      Buffer.alloc(128, 2),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const imageHeaders = {
+      ...headers,
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+    };
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/scene",
+          headers: imageHeaders,
+          payload,
+        })
+      ).statusCode,
+    ).toBe(403);
+    const result = await app.inject({
+      method: "POST",
+      url: "/api/scene",
+      headers: { ...imageHeaders, "x-image-consent": "true" },
+      payload,
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().scene.provenance).toBe("meta_glasses");
+    expect(seen).not.toBeNull();
+    expect((seen as unknown as Buffer).every((v) => v === 0)).toBe(true);
+    await app.close();
+  });
   it("requires explicit audio consent, bounds recordings, and erases uploaded buffers after transcription", async () => {
     let seen: Buffer | null = null;
     const transcriber = {

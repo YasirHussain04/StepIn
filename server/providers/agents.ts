@@ -1,4 +1,4 @@
-import type { Draft } from "../../shared/contracts";
+import type { Draft, SceneSummary } from "../../shared/contracts";
 
 export type AgentInput = {
   room: string;
@@ -7,6 +7,8 @@ export type AgentInput = {
   action: string;
   history: { role: string; text: string }[];
   affirmations: boolean;
+  /** Glasses-derived scene evidence; never treat typed room text as camera data. */
+  scene: SceneSummary | null;
 };
 export interface Agents {
   suggest(
