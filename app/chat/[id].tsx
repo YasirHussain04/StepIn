@@ -29,6 +29,7 @@ import { CoachAction, runFixture } from "../../src/services/coach";
 import { approvedSpokenText } from "../../src/services/playback";
 import { canSpeak } from "../../src/domain/quiz";
 import { api, liveCoach } from "../../src/services/api";
+import { chatHistoryPolicy } from "../../src/services/chatHistory";
 import { VoiceRecorder } from "../../components/VoiceRecorder";
 import { SpokenCoachCard } from "../../components/SpokenCoachCard";
 
@@ -129,15 +130,16 @@ export default function Conversation() {
         throw new Error("Complete and confirm your preferences first.");
       const profileId = active.id;
       const cloudSync = !!stateNow.cloud?.enabled && !!store.account;
-      // Local-device live turns stay on-device for history; server uses transient room + localProfile.
-      const history =
-        cloudSync &&
-        stateNow.settings.history &&
-        current.persisted !== false;
+      const { localHistory, serverHistory } = chatHistoryPolicy(
+        stateNow.settings.history,
+        current.persisted,
+        cloudSync,
+      );
       const policy = JSON.stringify({
         provider: "gemini",
         profileId,
-        history,
+        history: serverHistory,
+        localHistory,
         share: stateNow.settings.shareProfile !== false,
         affirmations: stateNow.settings.affirmations,
         local: !cloudSync,
@@ -166,7 +168,7 @@ export default function Conversation() {
             text,
             action,
             createdAt: new Date().toISOString(),
-            persisted: history,
+            persisted: localHistory,
             ...(live
               ? {
                   requestId: uid(),
@@ -209,13 +211,13 @@ export default function Conversation() {
             message: text,
             action,
             expectedProfileVersionId: profileId,
-            history,
+            history: serverHistory,
             shareProfile: stateNow.settings.shareProfile !== false,
             affirmations: stateNow.settings.affirmations,
             processingConsent: true,
             processingProvider: "gemini",
             ...(scene ? { scene } : {}),
-            ...(history
+            ...(serverHistory
               ? {}
               : {
                   localProfile: active,
@@ -252,7 +254,14 @@ export default function Conversation() {
         );
       if (!store.getState().sessions.some((s) => s.id === id))
         throw new Error("This conversation was deleted.");
-      response.persisted = history && store.getState().settings.history;
+      const latestState = store.getState();
+      response.persisted =
+        localHistory &&
+        chatHistoryPolicy(
+          latestState.settings.history,
+          latestState.sessions.find((s) => s.id === id)?.persisted,
+          cloudSync,
+        ).localHistory;
       if (live) {
         store.appendLiveMessage(id, response);
         void store.flushSync().catch(() => {});

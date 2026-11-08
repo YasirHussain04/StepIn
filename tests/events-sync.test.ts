@@ -47,7 +47,7 @@ describe("organizer event refresh", () => {
       .mockRejectedValue(new Error("Offline"));
     const service = new EventService(
       readConfig({}),
-      fetcher,
+      (input, init) => fetcher(String(input), init),
       ".cache/test-events/cache.json",
     );
     const first = await service.get(true);
@@ -68,7 +68,7 @@ describe("organizer event refresh", () => {
       );
     const service = new EventService(
       readConfig({}),
-      fetcher,
+      (input, init) => fetcher(String(input), init),
       ".cache/test-events/concurrent.json",
     );
     await Promise.all([service.get(true), service.get(true)]);

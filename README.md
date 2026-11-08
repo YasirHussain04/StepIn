@@ -106,4 +106,4 @@ node scripts/run.cjs expo install --check
 node scripts/run.cjs expo export --platform all --output-dir dist-final
 ```
 
-See [VERIFICATION.md](VERIFICATION.md) for performed checks and remaining live/device validation. No phone camera, image picker, Meta native bridge, room sweeps or Gemini scene-analysis path is included in this milestone.
+See [VERIFICATION.md](VERIFICATION.md) for performed checks and remaining live/device validation. The Meta native bridge and Gemini scene-analysis path are implemented; physical glasses capture and Bluetooth audio still require device validation.

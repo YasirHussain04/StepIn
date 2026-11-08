@@ -1,10 +1,8 @@
-import { Platform } from "react-native";
+import { fetch } from "expo/fetch";
 import { apiBase, ClientError } from "./api";
 import { bearerAuthHeader } from "./authHeaders";
-import {
-  SceneResponseSchema,
-  type SceneSummary,
-} from "../../shared/contracts";
+import { uploadFile } from "./uploadFile";
+import { SceneResponseSchema, type SceneSummary } from "../../shared/contracts";
 
 export async function analyzeSceneStills(
   uris: string[],
@@ -19,17 +17,19 @@ export async function analyzeSceneStills(
   const form = new FormData();
   for (let i = 0; i < uris.length; i++) {
     const uri = uris[i];
-    if (Platform.OS === "web") {
-      const blob = await fetch(uri).then((r) => r.blob());
-      if (blob.size > 2 * 1024 * 1024)
-        throw new ClientError("TOO_LARGE", "Each still must be under 2 MB.");
-      form.append("image", blob, `still-${i}.jpg`);
-    } else
-      form.append("image", {
-        uri,
-        name: `still-${i}.jpg`,
-        type: "image/jpeg",
-      } as unknown as Blob);
+    const blob = await uploadFile(uri, signal);
+    if (blob.size > 2 * 1024 * 1024)
+      throw new ClientError("TOO_LARGE", "Each still must be under 2 MB.");
+    if (!blob.size)
+      throw new ClientError(
+        "INVALID_IMAGE",
+        "The still is empty. Capture it again.",
+      );
+    form.append(
+      "image",
+      blob.type ? blob : blob.slice(0, blob.size, "image/jpeg"),
+      `still-${i}.jpg`,
+    );
   }
   const response = await fetch(`${apiBase(url)}/api/scene`, {
     method: "POST",

@@ -1,7 +1,8 @@
-import { Platform } from "react-native";
+import { fetch } from "expo/fetch";
 import { apiBase, ClientError } from "./api";
 import { bearerAuthHeader } from "./authHeaders";
 import { recordingUploadMeta } from "./recordingPresets";
+import { uploadFile } from "./uploadFile";
 
 export async function transcribeClip(
   uri: string,
@@ -9,22 +10,29 @@ export async function transcribeClip(
   url: string | undefined,
   signal: AbortSignal,
 ): Promise<string> {
+  if (!Number.isFinite(duration) || duration < 0.1 || duration > 45)
+    throw new ClientError(
+      "RECORDING_LIMIT",
+      "Record up to 45 seconds at a time.",
+    );
   const form = new FormData();
   const meta = recordingUploadMeta(uri);
-  if (Platform.OS === "web") {
-    const clip = await fetch(uri).then((r) => r.blob());
-    if (clip.size > 4 * 1024 * 1024)
-      throw new ClientError(
-        "TOO_LARGE",
-        "Record a shorter message (up to 45 seconds).",
-      );
-    form.append("audio", clip, meta.name);
-  } else
-    form.append("audio", {
-      uri,
-      name: meta.name,
-      type: meta.type,
-    } as unknown as Blob);
+  const clip = await uploadFile(uri, signal);
+  if (clip.size > 4 * 1024 * 1024)
+    throw new ClientError(
+      "TOO_LARGE",
+      "Record a shorter message (up to 45 seconds).",
+    );
+  if (!clip.size)
+    throw new ClientError(
+      "INVALID_AUDIO",
+      "The recording is empty. Record again.",
+    );
+  form.append(
+    "audio",
+    clip.type ? clip : clip.slice(0, clip.size, meta.type),
+    meta.name,
+  );
   const response = await fetch(`${apiBase(url)}/api/transcribe`, {
     method: "POST",
     body: form,

@@ -1,5 +1,22 @@
 # StepIn verification
 
+## November 8, 2026: camera sessions and media uploads
+
+This update supersedes the historical Meta implementation status in the November 7 milestone below.
+
+- Audio and scene uploads now use Expo File/Blob objects with Expo fetch. Regression coverage uses the installed SDK's actual FormData patch and multipart serializer: it reproduces `Unsupported FormDataPart implementation` with the former URI descriptor, then sends native-style audio and three stills through the real Fastify routes using controlled transcription/scene providers. Missing, empty, oversized and cancelled uploads are also covered.
+- Camera startup observes native session events before creation, waits for `started` before attaching the camera, and waits for `streaming` before enabling capture. Failed startup preserves native error details and cleans up. Camera streams are removed before stopping sessions so a later capture cannot select a retained old stream.
+- Spoken coaching handles release during native recorder preparation, stops and discards recording on screen exit/background/account or profile changes, and bounds recording/processing. Playback retains its approval guard.
+- Fixed local chat message retention being incorrectly tied to account sync. Local demo/live messages now follow the history setting, while remote persistence requires sync; temporary sessions remain excluded.
+- TypeScript and all **120 tests across 10 files** passed. Production web, Android and iOS bundle exports passed. Expo's offline dependency check found the installed dependencies compatible with its bundled version map.
+- A browser walkthrough completed the classic quiz, confirmed a test profile, generated approved offline fixture guidance, and verified both chat messages survived a fresh app load. No app console errors were observed. This checks web startup, local persistence and the offline flow.
+
+These are JavaScript changes and use the existing native dependencies. Reload the Metro bundle in the installed development client to receive them. An app with an embedded production bundle needs a new app build/release containing the updated JavaScript.
+
+No physical iPhone or Meta glasses, full Xcode toolchain, or configured live provider/account credentials were available here. Physical capture, Bluetooth mic/speaker routing, real transcription/scene generation and hosted account sync remain unverified by this update. The bundle exports are not signed native builds or device runs.
+
+## Historical November 7 milestone
+
 Date: November 7, 2026. Scope: app-only backend/accounts/voice/event milestone, version 0.2.0. Meta integration remains outside this milestone.
 
 ## Automated verification

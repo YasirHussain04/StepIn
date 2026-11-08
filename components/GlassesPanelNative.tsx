@@ -1,13 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Image, View } from "react-native";
+import { AppState, Image, View } from "react-native";
+import { useFocusEffect } from "expo-router";
 import {
   useMetaWearables,
   EMWDATStreamView,
+  addListener,
   type Device,
   type PhotoData,
 } from "expo-meta-wearables-dat";
 import { Badge, Body, Button, C, Card, Icon, s } from "./ui";
 import { audioRouteHint, audioRouteLabel } from "../src/services/audioRoute";
+import {
+  startGlassesCamera,
+  stopGlassesCamera,
+} from "../src/services/glassesSession";
 
 export type CapturedStill = {
   uri: string;
@@ -16,7 +22,8 @@ export type CapturedStill = {
 };
 
 function errorDetail(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (error instanceof Error && error.message.trim())
+    return error.message.trim();
   if (typeof error === "string" && error.trim()) return error.trim();
   return fallback;
 }
@@ -72,10 +79,20 @@ export function GlassesPanelNative({
   const [error, setError] = useState("");
   const [still, setStill] = useState<CapturedStill | null>(null);
   const pendingPhoto = useRef(false);
+  const photoTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionInFlight = useRef(false);
   const sessionIdRef = useRef<string | null>(null);
+  const startup = useRef<AbortController | null>(null);
+  const teardown = useRef<Promise<void>>(Promise.resolve());
+  const mounted = useRef(true);
   const stillReady = useRef(onStillReady);
   stillReady.current = onStillReady;
+
+  const clearPendingPhoto = useCallback(() => {
+    pendingPhoto.current = false;
+    if (photoTimeout.current) clearTimeout(photoTimeout.current);
+    photoTimeout.current = null;
+  }, []);
 
   const {
     isConfigured,
@@ -83,6 +100,7 @@ export function GlassesPanelNative({
     registrationState,
     permissionStatus,
     devices,
+    streamState,
     startRegistration,
     requestPermission,
     refreshDevices,
@@ -90,11 +108,12 @@ export function GlassesPanelNative({
     startSession,
     stopSession,
     addStreamToSession,
+    removeStreamFromSession,
     capturePhoto,
   } = useMetaWearables({
     onPhotoCaptured: (photo: PhotoData) => {
       if (!pendingPhoto.current) return;
-      pendingPhoto.current = false;
+      clearPendingPhoto();
       const next: CapturedStill = {
         uri: photo.filePath.startsWith("file://")
           ? photo.filePath
@@ -107,17 +126,26 @@ export function GlassesPanelNative({
       setBusy("");
     },
     onStreamError: () => {
-      setError("The glasses camera stream stopped. Retry capture or reconnect.");
+      if (!sessionIdRef.current || sessionInFlight.current) return;
+      setError(
+        "The glasses camera stream stopped. Retry capture or reconnect.",
+      );
       setBusy("");
-      pendingPhoto.current = false;
+      clearPendingPhoto();
     },
     onDeviceSessionStateChange: (id, state) => {
       if (state === "stopped" && sessionIdRef.current === id) {
         sessionIdRef.current = null;
         setSessionId(null);
+        clearPendingPhoto();
+        setBusy("");
+        // The bridge removes DeviceSession here but keeps its StreamSession.
+        // Startup cleanup is owned by startGlassesCamera while it is in flight.
+        if (!sessionInFlight.current) void cleanupCamera(id);
       }
     },
-    onDeviceSessionError: (_id, _code, message) => {
+    onDeviceSessionError: (id, _code, message) => {
+      if (id !== sessionIdRef.current) return;
       const detail = (message ?? "").trim();
       if (detail)
         setError(
@@ -129,6 +157,63 @@ export function GlassesPanelNative({
   const registered = registrationState === "registered";
   const connected = devices.some((d) => d.linkState === "connected");
 
+  const cleanupCamera = useCallback(
+    (id: string) => {
+      const task = teardown.current.then(() =>
+        stopGlassesCamera(
+          {
+            removeStream: removeStreamFromSession,
+            stopSession,
+            onSessionState: (listener) => {
+              const sub = addListener("onDeviceSessionStateChange", (e) =>
+                listener(e.sessionId, e.state),
+              );
+              return () => sub?.remove();
+            },
+          },
+          id,
+        ),
+      );
+      teardown.current = task;
+      return task;
+    },
+    [removeStreamFromSession, stopSession],
+  );
+
+  const stopCamera = useCallback(async () => {
+    startup.current?.abort();
+    const id = sessionIdRef.current;
+    sessionIdRef.current = null;
+    clearPendingPhoto();
+    if (mounted.current) {
+      setSessionId(null);
+      setBusy("");
+    }
+    // A pending startup catches cancellation and tears down its own session.
+    if (id && !sessionInFlight.current) await cleanupCamera(id);
+  }, [clearPendingPhoto, cleanupCamera]);
+
+  useEffect(() => {
+    mounted.current = true;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background") void stopCamera();
+    });
+    return () => {
+      mounted.current = false;
+      subscription.remove();
+      void stopCamera();
+    };
+  }, [stopCamera]);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        void stopCamera();
+      },
+      [stopCamera],
+    ),
+  );
+
   useEffect(() => {
     onConnectedChange?.(connected);
   }, [connected, onConnectedChange]);
@@ -136,31 +221,48 @@ export function GlassesPanelNative({
   useEffect(() => {
     if (registrationState === "registering")
       setBusy("Waiting for Meta AI approval…");
+    else
+      setBusy((current) =>
+        current === "Waiting for Meta AI approval…" ||
+        current === "Opening Meta AI…"
+          ? ""
+          : current,
+      );
   }, [registrationState]);
 
-  const waitForEligible = useCallback(async () => {
-    let list = await refreshDevices();
-    let eligible = pickEligible(list);
-    if (eligible) return { eligible, list };
-    for (let i = 0; i < 4; i++) {
-      setBusy("Waiting for glasses DAT handshake…");
-      await sleep(700);
-      list = await refreshDevices();
-      eligible = pickEligible(list);
+  const waitForEligible = useCallback(
+    async (signal: AbortSignal) => {
+      let list = await refreshDevices();
+      signal.throwIfAborted();
+      let eligible = pickEligible(list);
       if (eligible) return { eligible, list };
-      const linked = list.find((d) => d.linkState === "connected");
-      if (linked && linked.compatibility !== "undefined") break;
-    }
-    return { eligible: pickEligible(list), list };
-  }, [refreshDevices]);
+      for (let i = 0; i < 4; i++) {
+        setBusy("Waiting for glasses DAT handshake…");
+        await sleep(700);
+        signal.throwIfAborted();
+        list = await refreshDevices();
+        signal.throwIfAborted();
+        eligible = pickEligible(list);
+        if (eligible) return { eligible, list };
+        const linked = list.find((d) => d.linkState === "connected");
+        if (linked && linked.compatibility !== "undefined") break;
+      }
+      return { eligible: pickEligible(list), list };
+    },
+    [refreshDevices],
+  );
 
   const register = useCallback(async () => {
+    if (
+      registrationState === "registered" ||
+      registrationState === "registering"
+    )
+      return;
     setError("");
     setBusy("Opening Meta AI…");
     try {
       await startRegistration();
-      if (registrationState !== "registered")
-        setBusy("Waiting for Meta AI approval…");
+      setBusy((current) => (current === "Opening Meta AI…" ? "" : current));
     } catch (e) {
       setError(
         `${errorDetail(e, "Registration could not start.")} Update Meta AI, enable Developer Mode (tap App version 7×, toggle off→on), force-quit Meta AI, then retry.`,
@@ -171,7 +273,9 @@ export function GlassesPanelNative({
 
   const askCamera = useCallback(async () => {
     if (!registered) {
-      setError("Register with Meta AI successfully before requesting camera access.");
+      setError(
+        "Register with Meta AI successfully before requesting camera access.",
+      );
       return;
     }
     setError("");
@@ -202,21 +306,26 @@ export function GlassesPanelNative({
       return;
     }
     sessionInFlight.current = true;
+    const controller = new AbortController();
+    startup.current = controller;
     setError("");
     setBusy("Finding an eligible glasses device…");
-    let createdId: string | null = null;
     try {
+      await teardown.current;
+      controller.signal.throwIfAborted();
       const prior = sessionIdRef.current;
       if (prior) {
         try {
-          await stopSession(prior);
+          await cleanupCamera(prior);
         } catch {
           /* prior session may already be gone */
         }
         sessionIdRef.current = null;
         setSessionId(null);
       }
-      const { eligible, list } = await waitForEligible();
+      const { eligible, list } = await waitForEligible(controller.signal);
+      if (controller.signal.aborted)
+        throw new Error("Camera session cancelled.");
       if (!eligible) {
         setError(
           `No eligible device available. ${compatibilityHint(undefined, list)} Wear glasses unfolded, finish Developer Mode install if pending, then retry.`,
@@ -224,29 +333,58 @@ export function GlassesPanelNative({
         return;
       }
       setBusy(`Starting session on ${eligible.name || eligible.deviceType}…`);
-      // Auto device selector — SpecificDeviceSelector often stops before start.
-      const id = await createSession();
-      createdId = id;
-      await startSession(id);
-      await addStreamToSession(id, {
-        resolution: "medium",
-        frameRate: 24,
-      });
-      sessionIdRef.current = id;
-      setSessionId(id);
+      const id = await startGlassesCamera(
+        {
+          createSession,
+          startSession,
+          stopSession,
+          removeStream: removeStreamFromSession,
+          addStream: (id) =>
+            addStreamToSession(id, {
+              resolution: "medium",
+              frameRate: 24,
+            }),
+          onSessionState: (listener) => {
+            const sub = addListener("onDeviceSessionStateChange", (e) =>
+              listener(e.sessionId, e.state),
+            );
+            return () => sub?.remove();
+          },
+          onSessionError: (listener) => {
+            const sub = addListener("onDeviceSessionError", (e) =>
+              listener(e.sessionId, e.message || e.error),
+            );
+            return () => sub?.remove();
+          },
+          onStreamState: (listener) => {
+            const sub = addListener("onStreamStateChange", (e) =>
+              listener(e.state),
+            );
+            return () => sub?.remove();
+          },
+          onStreamError: (listener) => {
+            const sub = addListener("onStreamError", (e) => listener(e.type));
+            return () => sub?.remove();
+          },
+        },
+        controller.signal,
+        (id) => {
+          if (mounted.current && !controller.signal.aborted)
+            sessionIdRef.current = id;
+        },
+      );
+      if (
+        mounted.current &&
+        !controller.signal.aborted &&
+        sessionIdRef.current === id
+      )
+        setSessionId(id);
     } catch (e) {
-      if (createdId) {
-        try {
-          await stopSession(createdId);
-        } catch {
-          /* best-effort cleanup */
-        }
-      }
+      if (!mounted.current || startup.current?.signal.aborted) return;
       const detail = errorDetail(e, "Could not start a glasses session.");
       const snapshot = devices
         .map(
-          (d) =>
-            `${d.name || d.deviceType}:${d.linkState}/${d.compatibility}`,
+          (d) => `${d.name || d.deviceType}:${d.linkState}/${d.compatibility}`,
         )
         .join(", ");
       setError(
@@ -255,8 +393,9 @@ export function GlassesPanelNative({
       sessionIdRef.current = null;
       setSessionId(null);
     } finally {
+      startup.current = null;
       sessionInFlight.current = false;
-      setBusy("");
+      if (mounted.current) setBusy("");
     }
   }, [
     busy,
@@ -266,6 +405,8 @@ export function GlassesPanelNative({
     createSession,
     startSession,
     stopSession,
+    removeStreamFromSession,
+    cleanupCamera,
     addStreamToSession,
     devices,
   ]);
@@ -273,39 +414,45 @@ export function GlassesPanelNative({
   const endSession = useCallback(async () => {
     if (!sessionId) return;
     setBusy("Stopping…");
-    try {
-      await stopSession(sessionId);
-    } catch {
-      /* session may already be stopped */
-    } finally {
-      sessionIdRef.current = null;
-      setSessionId(null);
-      setBusy("");
-    }
-  }, [sessionId, stopSession]);
+    await stopCamera();
+  }, [sessionId, stopCamera]);
 
   const snap = useCallback(async () => {
     if (!registered) {
       setError("Register with Meta AI before capturing.");
       return;
     }
-    if (!sessionId) {
-      setError("Start a glasses session before capturing a still.");
+    if (pendingPhoto.current) return;
+    if (!sessionId || streamState !== "streaming") {
+      setError(
+        "Wait for the glasses camera to stream before capturing a still.",
+      );
       return;
     }
     setError("");
     setBusy("Capturing still…");
     pendingPhoto.current = true;
+    photoTimeout.current = setTimeout(() => {
+      if (!pendingPhoto.current) return;
+      clearPendingPhoto();
+      if (mounted.current) {
+        setBusy("");
+        setError(
+          "The glasses did not return a photo. Retry capture or restart the camera session.",
+        );
+      }
+    }, 15_000);
     try {
       await capturePhoto("jpeg");
     } catch (e) {
-      pendingPhoto.current = false;
+      if (!mounted.current || !pendingPhoto.current) return;
+      clearPendingPhoto();
       setBusy("");
       setError(
         `${errorDetail(e, "Photo capture failed.")} Keep the session streaming and retry.`,
       );
     }
-  }, [registered, sessionId, capturePhoto]);
+  }, [registered, sessionId, streamState, capturePhoto, clearPendingPhoto]);
 
   const discard = useCallback(() => {
     setStill(null);
@@ -388,7 +535,7 @@ export function GlassesPanelNative({
               title="Capture still"
               icon="camera"
               onPress={snap}
-              disabled={!registered}
+              disabled={!registered || !!busy || streamState !== "streaming"}
             />
             <Button
               secondary

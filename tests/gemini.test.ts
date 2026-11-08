@@ -107,7 +107,10 @@ describe("two Gemini coaching agents", () => {
       );
     const sdk = new GoogleGenAI({
       apiKey: "test-only-key",
-      httpOptions: { fetch: fetcher, retryOptions: { attempts: 1 } },
+      httpOptions: {
+        fetch: (input, init) => fetcher(String(input), init),
+        retryOptions: { attempts: 1 },
+      },
     });
     const agents = new GeminiAgents(config(), sdk);
     const signal = new AbortController().signal;
