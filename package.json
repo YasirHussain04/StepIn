@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",
+    "@expo/ngrok": "^4.1.0",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "node": "22.22.0",
