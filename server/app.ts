@@ -2,15 +2,20 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
+import websocket from "@fastify/websocket";
+import WebSocket from "ws";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import {
   CoachRequestSchema,
   Id,
   ProfileSchema,
+  QuizTurnRequestSchema,
+  QuizTurnResponseSchema,
   SessionHeaderSchema,
   SyncRequestSchema,
 } from "../shared/contracts";
+import { GeminiQuizInterviewer } from "./providers/quiz";
 import { Store, SupabaseStore } from "./store";
 import { Config, LOCAL_DEV_TOKEN, LOCAL_DEV_USER } from "./config";
 import { ApiError } from "./errors";
@@ -28,6 +33,7 @@ import {
   SceneAnalyzer,
 } from "./providers/scene";
 import { EventService } from "./events";
+import { connectGeminiLive, isLiveStartMessage } from "./live/proxy";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -58,6 +64,7 @@ export async function buildApp(
   );
   const transcriber = deps.transcriber ?? new GeminiTranscriber(config);
   const sceneAnalyzer = deps.sceneAnalyzer ?? new GeminiSceneAnalyzer(config);
+  const quiz = new GeminiQuizInterviewer(config);
   const events = deps.events ?? new EventService(config);
   const running = new Map<string, AbortController>();
   const activeSessions = new Set<string>();
@@ -78,10 +85,12 @@ export async function buildApp(
     limits: { fileSize: 4 * 1024 * 1024, files: 3, fields: 0, parts: 3 },
     throwFileSizeLimit: true,
   });
+  await app.register(websocket);
   app.addHook("preHandler", async (request) => {
     if (
       request.routeOptions.url?.startsWith("/api/") &&
-      request.routeOptions.url !== "/api/events"
+      request.routeOptions.url !== "/api/events" &&
+      request.routeOptions.url !== "/api/live"
     ) {
       const match = request.headers.authorization?.match(/^Bearer (.+)$/);
       const token = match?.[1];
@@ -142,6 +151,8 @@ export async function buildApp(
       coaching: !!config.GEMINI_API_KEY,
       transcription: !!config.GEMINI_API_KEY,
       scene: !!config.GEMINI_API_KEY,
+      live: !!config.GEMINI_API_KEY,
+      quiz: !!config.GEMINI_API_KEY,
       events: true,
       glasses: true,
       localDevBypass: config.LOCAL_DEV_BYPASS,
@@ -151,8 +162,199 @@ export async function buildApp(
       audit: config.AUDIT_MODEL,
       transcription: config.TRANSCRIPTION_MODEL,
       scene: config.SCENE_MODEL,
+      live: config.LIVE_MODEL,
     },
   }));
+  app.get(
+    "/api/live",
+    { websocket: true, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (socket, request) => {
+      const query = z
+        .object({ access_token: z.string().optional() })
+        .parse(request.query ?? {});
+      const headerToken = request.headers.authorization?.match(
+        /^Bearer (.+)$/,
+      )?.[1];
+      const token = headerToken ?? query.access_token;
+      let actorId: string | null = null;
+      try {
+        if (
+          config.LOCAL_DEV_BYPASS &&
+          (token === LOCAL_DEV_TOKEN ||
+            (!token && config.NODE_ENV === "development"))
+        )
+          actorId = LOCAL_DEV_USER;
+        else if (!token)
+          throw new ApiError(
+            "UNAUTHENTICATED",
+            "Sign in to use live talk.",
+            401,
+          );
+        else actorId = (await store.authenticate(token)).id;
+      } catch (error) {
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : "Authentication failed for live talk.";
+        socket.send(JSON.stringify({ type: "error", message }));
+        socket.close();
+        return;
+      }
+      if (!config.GEMINI_API_KEY) {
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "Live talk needs GEMINI_API_KEY on the StepIn server.",
+          }),
+        );
+        socket.close();
+        return;
+      }
+
+      let upstream: ReturnType<typeof connectGeminiLive> | null = null;
+      let started = false;
+      let setupDone = false;
+      const closeBoth = () => {
+        try {
+          socket.close();
+        } catch {
+          /* already closed */
+        }
+        try {
+          upstream?.close();
+        } catch {
+          /* already closed */
+        }
+      };
+
+      socket.on("message", (raw: WebSocket.RawData) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(String(raw));
+        } catch {
+          socket.send(
+            JSON.stringify({
+              type: "error",
+              message: "Live talk messages must be JSON.",
+            }),
+          );
+          return;
+        }
+        if (!started) {
+          if (!isLiveStartMessage(parsed)) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                message: "Send a start message before streaming audio.",
+              }),
+            );
+            return;
+          }
+          if (
+            parsed.localProfile &&
+            actorId !== LOCAL_DEV_USER &&
+            !config.LOCAL_DEV_BYPASS
+          ) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                message:
+                  "Device-local profiles are only accepted in local development mode.",
+              }),
+            );
+            closeBoth();
+            return;
+          }
+          try {
+            upstream = connectGeminiLive(config, parsed);
+          } catch (error) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Could not open Gemini Live.",
+              }),
+            );
+            closeBoth();
+            return;
+          }
+          started = true;
+          upstream.on("message", (data: WebSocket.RawData) => {
+            const text = typeof data === "string" ? data : data.toString();
+            if (!setupDone) {
+              try {
+                const parsed = JSON.parse(text) as Record<string, unknown>;
+                if (parsed.setupComplete) {
+                  setupDone = true;
+                  if (socket.readyState === socket.OPEN)
+                    socket.send(JSON.stringify({ type: "ready", actorId }));
+                }
+              } catch {
+                /* forward below */
+              }
+            }
+            if (socket.readyState === socket.OPEN) socket.send(text);
+          });
+          upstream.on("close", () => {
+            if (socket.readyState === socket.OPEN) socket.close();
+          });
+          upstream.on("error", () => {
+            if (socket.readyState === socket.OPEN) {
+              socket.send(
+                JSON.stringify({
+                  type: "error",
+                  message: "The Gemini Live connection failed.",
+                }),
+              );
+              socket.close();
+            }
+          });
+          return;
+        }
+        if (!upstream || upstream.readyState !== WebSocket.OPEN || !setupDone) {
+          socket.send(
+            JSON.stringify({
+              type: "error",
+              message: "Live session is not connected yet. Wait and retry.",
+            }),
+          );
+          return;
+        }
+        const msg = parsed as Record<string, unknown>;
+        if (msg.type === "audio" && typeof msg.data === "string") {
+          upstream.send(
+            JSON.stringify({
+              realtimeInput: {
+                audio: {
+                  data: msg.data,
+                  mimeType: "audio/pcm;rate=16000",
+                },
+              },
+            }),
+          );
+          return;
+        }
+        if (msg.type === "audio_end") {
+          upstream.send(
+            JSON.stringify({ realtimeInput: { audioStreamEnd: true } }),
+          );
+          return;
+        }
+        if (msg.realtimeInput || msg.clientContent || msg.toolResponse)
+          upstream.send(JSON.stringify(parsed));
+      });
+      socket.on("close", () => {
+        try {
+          upstream?.close();
+        } catch {
+          /* ignore */
+        }
+      });
+      socket.on("error", closeBoth);
+    },
+  );
   app.get(
     "/api/events",
     { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
@@ -281,6 +483,25 @@ export async function buildApp(
       );
     return { session };
   });
+  app.post(
+    "/api/quiz/turn",
+    {
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+      bodyLimit: 64_000,
+    },
+    async (request) => {
+      if (!config.GEMINI_API_KEY)
+        throw new ApiError(
+          "UNAVAILABLE",
+          "Conversational quiz needs GEMINI_API_KEY on the StepIn server.",
+          503,
+          "quiz",
+        );
+      const body = QuizTurnRequestSchema.parse(request.body);
+      const result = await quiz.turn(body, AbortSignal.timeout(config.AI_TIMEOUT_MS));
+      return QuizTurnResponseSchema.parse(result);
+    },
+  );
   app.get("/api/messages/:id/audit", async (request) => {
     const s = await store.snapshot(request.actor!.id);
     const message = s.sessions

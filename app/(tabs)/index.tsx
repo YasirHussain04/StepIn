@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import {
   Badge,
@@ -16,6 +16,7 @@ import {
 } from "../../components/ui";
 import { RoomComposer } from "../../components/RoomComposer";
 import { GlassesPanel, type CapturedStill } from "../../components/GlassesPanel";
+import { SpokenCoachCard } from "../../components/SpokenCoachCard";
 import { useApp } from "../../src/state/AppProvider";
 import { scenarios } from "../../src/demo/scenarios";
 import { uid, hasGeminiConsent } from "../../src/domain/types";
@@ -25,10 +26,12 @@ import type { SceneSummary } from "../../shared/contracts";
 
 export default function Speak() {
   const { state, setState, profile } = useApp();
-  const [still, setStill] = useState<CapturedStill | null>(null);
+  const [stills, setStills] = useState<CapturedStill[]>([]);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [sceneBusy, setSceneBusy] = useState(false);
   const [sceneError, setSceneError] = useState("");
+  const [activeScene, setActiveScene] = useState<SceneSummary | null>(null);
+  const [coachSessionId, setCoachSessionId] = useState<string | null>(null);
 
   function start(
     room: string,
@@ -65,8 +68,18 @@ export default function Speak() {
     router.push({ pathname: "/chat/[id]", params: { id } });
   }
 
-  async function sendStill() {
+  function queueStill(still: CapturedStill | null) {
     if (!still) return;
+    setStills((prev) => {
+      if (prev.length >= 3) return prev;
+      if (prev.some((p) => p.uri === still.uri)) return prev;
+      return [...prev, still];
+    });
+    setSceneError("");
+  }
+
+  async function analyzeQueued() {
+    if (!stills.length) return;
     if (!profile) {
       router.push("/quiz");
       return;
@@ -87,12 +100,13 @@ export default function Speak() {
     setSceneError("");
     try {
       const scene = await analyzeSceneStills(
-        [still.uri],
+        stills.map((s) => s.uri),
         state.settings.apiUrl,
         AbortSignal.timeout(120_000),
       );
-      start(roomFromScene(scene), undefined, "Glasses scene", scene);
-      setStill(null);
+      setActiveScene(scene);
+      setCoachSessionId(uid());
+      setStills([]);
     } catch (error) {
       setSceneError(
         error instanceof ClientError
@@ -115,8 +129,8 @@ export default function Speak() {
         </View>
         <Title>Good things start{"\n"}with a hello.</Title>
         <Body muted>
-          A space to find your words, take a small step,{"\n"}and feel more at
-          home.
+          See the gathering, then get approach advice that fits how you
+          communicate.
         </Body>
       </View>
       {!profile ? (
@@ -128,8 +142,8 @@ export default function Speak() {
             </Text>
           </View>
           <Body muted>
-            10 short questions help us understand your pace and preferences.
-            Confirm your profile to start practicing.
+            A short AI chat learns your pace and style so coaching stays
+            natural. Classic form is available too.
           </Body>
           <Button
             title={state.draft ? "Continue my quiz" : "Get to know me"}
@@ -149,7 +163,9 @@ export default function Speak() {
         >
           <Icon name="checkmark-circle-outline" size={19} />
           <Body style={{ fontSize: 13, flex: 1 }}>
-            Your preferences are ready. Go at your pace.
+            {profile.persona
+              ? "Style card ready. Coaching will match your voice."
+              : "Your preferences are ready. Go at your pace."}
           </Body>
           <Pressable
             accessibilityRole="button"
@@ -162,37 +178,120 @@ export default function Speak() {
         </View>
       )}
       <GlassesPanel
-        onStillReady={setStill}
+        onStillReady={queueStill}
         onConnectedChange={setGlassesConnected}
       />
-      {still ? (
+      {stills.length > 0 ? (
         <Card>
-          <Body style={{ fontWeight: "600" }}>Use this glasses still?</Body>
-          <Body muted style={s.small}>
-            Review first. Nothing is uploaded until you send it for scene
-            analysis. Mic/speaker stay on Bluetooth
-            {glassesConnected ? " (glasses linked)" : ""}.
+          <Body style={{ fontWeight: "600" }}>
+            Stills ready ({stills.length}/3)
           </Body>
+          <Body muted style={s.small}>
+            Capture up to three reviewed stills. Nothing is uploaded until you
+            analyze. We use them to understand the kind of gathering—not
+            continuous camera.
+          </Body>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {stills.map((still) => (
+              <View key={still.uri} style={{ width: "30%" }}>
+                <Image
+                  source={{ uri: still.uri }}
+                  style={{
+                    width: "100%",
+                    height: 72,
+                    borderRadius: 10,
+                    backgroundColor: C.line,
+                  }}
+                  accessibilityLabel="Queued glasses still"
+                />
+                <Button
+                  secondary
+                  title="Remove"
+                  onPress={() =>
+                    setStills((prev) => prev.filter((p) => p.uri !== still.uri))
+                  }
+                  disabled={sceneBusy}
+                />
+              </View>
+            ))}
+          </View>
           {sceneError ? (
             <Body style={{ color: C.danger }}>{sceneError}</Body>
           ) : null}
           <Button
-            title={sceneBusy ? "Analyzing…" : "Send still for scene context"}
+            title={
+              sceneBusy
+                ? "Analyzing…"
+                : `Analyze ${stills.length} still${stills.length === 1 ? "" : "s"}`
+            }
             icon="cloud-upload-outline"
-            onPress={sendStill}
-            disabled={sceneBusy || !profile}
+            onPress={() => void analyzeQueued()}
+            disabled={sceneBusy || !profile || stills.length === 0}
           />
           <Button
             secondary
-            title="Discard still"
+            title="Clear stills"
             icon="trash-outline"
             onPress={() => {
-              setStill(null);
+              setStills([]);
               setSceneError("");
             }}
             disabled={sceneBusy}
           />
         </Card>
+      ) : null}
+      {activeScene ? (
+        <Card style={{ backgroundColor: C.sage }}>
+          <Badge>SCENE READY</Badge>
+          <Body style={{ fontWeight: "700" }}>
+            Looks like: {activeScene.eventKind}
+          </Body>
+          <Body>
+            Social setup: {activeScene.socialSetup.replaceAll("_", " ")}
+          </Body>
+          {activeScene.coachingFocus.map((c) => (
+            <Body key={c} style={s.small}>
+              · {c}
+            </Body>
+          ))}
+          {activeScene.uncertainties.length ? (
+            <Body style={s.small}>
+              Uncertain: {activeScene.uncertainties.join(" · ")}
+            </Body>
+          ) : null}
+          <SpokenCoachCard
+            room={roomFromScene(activeScene)}
+            scene={activeScene}
+            sessionId={coachSessionId ?? undefined}
+            glassesConnected={glassesConnected}
+          />
+          <Button
+            secondary
+            title="Open text chat with this scene"
+            icon="chatbubble-outline"
+            onPress={() =>
+              start(
+                roomFromScene(activeScene),
+                undefined,
+                "Glasses scene",
+                activeScene,
+              )
+            }
+          />
+          <Button
+            secondary
+            title="Discard scene"
+            onPress={() => {
+              setActiveScene(null);
+              setCoachSessionId(null);
+            }}
+          />
+        </Card>
+      ) : profile ? (
+        <SpokenCoachCard
+          room="General practice — describe what you see when you talk."
+          glassesConnected={glassesConnected}
+        />
       ) : null}
       <RoomComposer onSubmit={(room) => start(room)} disabled={!profile} />
       <View style={{ gap: 13 }}>

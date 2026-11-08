@@ -183,7 +183,11 @@ export function comfortLabel(score: number) {
           ? "High"
           : "Very high";
 }
-export function createProfile(answers: Answers, revision: number): Profile {
+export function createProfile(
+  answers: Answers,
+  revision: number,
+  persona?: Profile["persona"],
+): Profile {
   if (!validateAnswers(answers)) throw new Error("SCREENING_REQUIRED");
   return {
     id: uid(),
@@ -194,6 +198,7 @@ export function createProfile(answers: Answers, revision: number): Profile {
     completedAt: new Date().toISOString(),
     questionnaireVersion: "1",
     scoringVersion: "1",
+    ...(persona ? { persona: JSON.parse(JSON.stringify(persona)) } : {}),
   };
 }
 export function requireProfile(

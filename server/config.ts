@@ -1,10 +1,11 @@
 import { z } from "zod";
 import dotenv from "dotenv";
 dotenv.config({ quiet: true });
-const geminiModel = z
-  .string()
-  .regex(/^(?:models\/)?gemini-[a-zA-Z0-9._-]+$/, "Use a Gemini model ID")
-  .default("gemini-3.8-flash");
+const geminiModel = (fallback: string) =>
+  z
+    .string()
+    .regex(/^(?:models\/)?gemini-[a-zA-Z0-9._-]+$/, "Use a Gemini model ID")
+    .default(fallback);
 const schema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -15,10 +16,11 @@ const schema = z.object({
   SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
-  CONVERSATION_MODEL: geminiModel,
-  AUDIT_MODEL: geminiModel,
-  TRANSCRIPTION_MODEL: geminiModel,
-  SCENE_MODEL: geminiModel,
+  CONVERSATION_MODEL: geminiModel("gemini-3.8-flash"),
+  AUDIT_MODEL: geminiModel("gemini-3.8-flash"),
+  TRANSCRIPTION_MODEL: geminiModel("gemini-3.8-flash"),
+  SCENE_MODEL: geminiModel("gemini-3.8-flash"),
+  LIVE_MODEL: geminiModel("gemini-2.5-flash-native-audio-preview-09-2025"),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(90000).default(35000),
   CORS_ORIGINS: z
     .string()

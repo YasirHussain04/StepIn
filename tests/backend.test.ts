@@ -53,6 +53,7 @@ const review = (): Review => ({
     "accessible_wording",
     "immediate_request",
     "no_inference",
+    "persona_fit",
   ],
   changes: [],
   clarificationQuestion: null,
@@ -589,6 +590,9 @@ describe("authenticated API and fail-closed agent coordination", () => {
           readableSigns: ["Welcome"],
           uncertainties: [],
           needsClarification: false,
+          eventKind: "meetup",
+          socialSetup: "small_group" as const,
+          coachingFocus: ["Welcome table near the door"],
           model: "test-scene",
           provenance: "meta_glasses" as const,
         };

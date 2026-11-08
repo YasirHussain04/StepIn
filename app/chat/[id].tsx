@@ -30,6 +30,7 @@ import { approvedSpokenText } from "../../src/services/playback";
 import { canSpeak } from "../../src/domain/quiz";
 import { api, liveCoach } from "../../src/services/api";
 import { VoiceRecorder } from "../../components/VoiceRecorder";
+import { SpokenCoachCard } from "../../components/SpokenCoachCard";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export default function Conversation() {
@@ -622,10 +623,17 @@ export default function Conversation() {
             ))}
         </View>
       )}
+      {session.mode === "live" ? (
+        <SpokenCoachCard
+          room={session.room}
+          scene={state.scenes?.[id]}
+          sessionId={id}
+        />
+      ) : null}
       <View style={{ gap: 10 }}>
         <Button
           secondary
-          title={showVoice ? "Hide voice recorder" : "Record a follow-up"}
+          title={showVoice ? "Hide clip recorder" : "Record a text follow-up"}
           icon="mic-outline"
           disabled={!!phase || !profile}
           onPress={() => setShowVoice((v) => !v)}

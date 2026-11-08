@@ -23,6 +23,7 @@ const checks = [
   "accessible_wording",
   "immediate_request",
   "no_inference",
+  "persona_fit",
 ] as const;
 async function stage<T>(
   factory: (signal: AbortSignal) => Promise<T>,

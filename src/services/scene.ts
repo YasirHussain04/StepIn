@@ -53,6 +53,9 @@ export async function analyzeSceneStills(
 
 export function roomFromScene(scene: SceneSummary): string {
   const parts = [
+    `Event: ${scene.eventKind}`,
+    `Social setup: ${scene.socialSetup.replaceAll("_", " ")}`,
+    ...scene.coachingFocus.map((c) => `Focus: ${c}`),
     ...scene.observations,
     ...scene.activities.map((a) => `Activity: ${a}`),
     ...scene.readableSigns.map((s) => `Sign: ${s}`),

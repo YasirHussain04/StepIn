@@ -40,6 +40,7 @@ const review: Review = {
     "accessible_wording",
     "immediate_request",
     "no_inference",
+    "persona_fit",
   ],
   changes: [],
   clarificationQuestion: null,
@@ -140,10 +141,10 @@ describe("two Gemini coaching agents", () => {
     );
     expect(
       bodies[1].generationConfig.responseJsonSchema.properties.checks.minItems,
-    ).toBe(7);
+    ).toBe(8);
     expect(
       bodies[1].generationConfig.responseJsonSchema.properties.checks.maxItems,
-    ).toBe(7);
+    ).toBe(8);
   });
   it("passes the rejected candidate and review feedback only to the revision call", async () => {
     const { agents, generateContent } = stub(result(draft));

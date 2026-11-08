@@ -14,6 +14,27 @@ export type CapturedStill = {
   height?: number;
 };
 
+function errorDetail(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return fallback;
+}
+
+function registrationLabel(state: string) {
+  switch (state) {
+    case "registered":
+      return "REGISTERED";
+    case "registering":
+      return "REGISTERING";
+    case "available":
+      return "AVAILABLE";
+    case "unavailable":
+      return "UNAVAILABLE";
+    default:
+      return String(state || "UNKNOWN").toUpperCase();
+  }
+}
+
 export function GlassesPanelNative({
   onStillReady,
   onConnectedChange,
@@ -64,41 +85,60 @@ export function GlassesPanelNative({
     },
   });
 
+  const registered = registrationState === "registered";
   const connected = devices.some((d) => d.linkState === "connected");
 
   useEffect(() => {
     onConnectedChange?.(connected);
   }, [connected, onConnectedChange]);
 
+  useEffect(() => {
+    if (registrationState === "registering")
+      setBusy("Waiting for Meta AI approval…");
+  }, [registrationState]);
+
   const register = useCallback(async () => {
     setError("");
     setBusy("Opening Meta AI…");
     try {
       await startRegistration();
-    } catch {
+      if (registrationState !== "registered")
+        setBusy("Waiting for Meta AI approval…");
+    } catch (e) {
       setError(
-        "Could not start registration. Install Meta AI, enable Developer Mode (tap App version 5×), and try again.",
+        `${errorDetail(e, "Registration could not start.")} Update Meta AI, enable Developer Mode (tap App version 7×, toggle off→on), force-quit Meta AI, then retry.`,
       );
-    } finally {
       setBusy("");
     }
-  }, [startRegistration]);
+  }, [startRegistration, registrationState]);
 
   const askCamera = useCallback(async () => {
+    if (!registered) {
+      setError("Register with Meta AI successfully before requesting camera access.");
+      return;
+    }
     setError("");
     setBusy("Requesting camera…");
     try {
       const status = await requestPermission("camera");
       if (status !== "granted")
-        setError("Camera permission was denied in Meta AI. Allow it to capture stills.");
-    } catch {
-      setError("Camera permission request failed. Check Meta AI → App connections.");
+        setError(
+          `Camera permission is ${status}. Open Meta AI → App connections and allow camera for StepIn.`,
+        );
+    } catch (e) {
+      setError(
+        `${errorDetail(e, "Camera permission request failed.")} Finish registration first, then allow camera in Meta AI → App connections.`,
+      );
     } finally {
       setBusy("");
     }
-  }, [requestPermission]);
+  }, [registered, requestPermission]);
 
   const beginSession = useCallback(async () => {
+    if (!registered) {
+      setError("Register with Meta AI before starting a camera session.");
+      return;
+    }
     setError("");
     setBusy("Starting glasses session…");
     try {
@@ -106,15 +146,15 @@ export function GlassesPanelNative({
       await startSession(id);
       await addStreamToSession(id, { resolution: "medium", frameRate: 15 });
       setSessionId(id);
-    } catch {
+    } catch (e) {
       setError(
-        "Could not start a glasses session. Confirm the glasses are worn, unfolded, and linked in Meta AI.",
+        `${errorDetail(e, "Could not start a glasses session.")} Confirm the glasses are worn, unfolded, and linked in Meta AI.`,
       );
       setSessionId(null);
     } finally {
       setBusy("");
     }
-  }, [createSession, startSession, addStreamToSession]);
+  }, [registered, createSession, startSession, addStreamToSession]);
 
   const endSession = useCallback(async () => {
     if (!sessionId) return;
@@ -130,6 +170,10 @@ export function GlassesPanelNative({
   }, [sessionId, stopSession]);
 
   const snap = useCallback(async () => {
+    if (!registered) {
+      setError("Register with Meta AI before capturing.");
+      return;
+    }
     if (!sessionId) {
       setError("Start a glasses session before capturing a still.");
       return;
@@ -139,12 +183,14 @@ export function GlassesPanelNative({
     pendingPhoto.current = true;
     try {
       await capturePhoto("jpeg");
-    } catch {
+    } catch (e) {
       pendingPhoto.current = false;
       setBusy("");
-      setError("Photo capture failed. Keep the session streaming and retry.");
+      setError(
+        `${errorDetail(e, "Photo capture failed.")} Keep the session streaming and retry.`,
+      );
     }
-  }, [sessionId, capturePhoto]);
+  }, [registered, sessionId, capturePhoto]);
 
   const discard = useCallback(() => {
     setStill(null);
@@ -158,9 +204,7 @@ export function GlassesPanelNative({
       <View style={s.row}>
         <Icon name="glasses-outline" />
         <Body style={{ fontWeight: "700", flex: 1 }}>Meta glasses</Body>
-        <Badge warm={registrationState !== "registered"}>
-          {registrationState === "registered" ? "REGISTERED" : "NOT REGISTERED"}
-        </Badge>
+        <Badge warm={!registered}>{registrationLabel(registrationState)}</Badge>
       </View>
       {configError ? (
         <Body style={{ color: C.danger }}>
@@ -169,13 +213,19 @@ export function GlassesPanelNative({
         </Body>
       ) : null}
       <Body muted style={s.small}>
-        Configured: {String(isConfigured)} · Camera: {permissionStatus} ·
-        Devices: {devices.length}
+        Configured: {String(isConfigured)} · Registration: {registrationState} ·
+        Camera: {permissionStatus} · Devices: {devices.length}
         {connected ? " · linked" : ""}
       </Body>
       <Body muted style={s.small}>
         {route}
       </Body>
+      {!registered ? (
+        <Body muted style={s.small}>
+          Camera stays locked until registration reaches registered. If Meta AI
+          shows “Internal error,” update Meta AI and re-toggle Developer Mode.
+        </Body>
+      ) : null}
       {devices.map((device) => (
         <Body key={device.identifier} style={s.small}>
           {device.name || device.deviceType} · {device.linkState}
@@ -184,8 +234,13 @@ export function GlassesPanelNative({
       {error ? <Body style={{ color: C.danger }}>{error}</Body> : null}
       {busy ? <Body muted>{busy}</Body> : null}
       <View style={{ gap: 8 }}>
-        {registrationState !== "registered" ? (
-          <Button title="Register with Meta AI" icon="link-outline" onPress={register} />
+        {!registered ? (
+          <Button
+            title="Register with Meta AI"
+            icon="link-outline"
+            onPress={register}
+            busy={registrationState === "registering" || busy === "Opening Meta AI…"}
+          />
         ) : null}
         {permissionStatus !== "granted" ? (
           <Button
@@ -193,6 +248,7 @@ export function GlassesPanelNative({
             title="Allow glasses camera"
             icon="camera-outline"
             onPress={askCamera}
+            disabled={!registered}
           />
         ) : null}
         {!sessionId ? (
@@ -200,12 +256,22 @@ export function GlassesPanelNative({
             title="Start camera session"
             icon="play-outline"
             onPress={beginSession}
-            disabled={registrationState !== "registered"}
+            disabled={!registered}
           />
         ) : (
           <>
-            <Button title="Capture still" icon="camera" onPress={snap} />
-            <Button secondary title="Stop session" icon="stop-outline" onPress={endSession} />
+            <Button
+              title="Capture still"
+              icon="camera"
+              onPress={snap}
+              disabled={!registered}
+            />
+            <Button
+              secondary
+              title="Stop session"
+              icon="stop-outline"
+              onPress={endSession}
+            />
           </>
         )}
       </View>
@@ -227,17 +293,27 @@ export function GlassesPanelNative({
           <Body style={{ fontWeight: "600" }}>Review captured still</Body>
           <Image
             source={{ uri: still.uri }}
-            style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: C.line }}
+            style={{
+              width: "100%",
+              height: 200,
+              borderRadius: 12,
+              backgroundColor: C.line,
+            }}
             resizeMode="cover"
             accessibilityLabel="Captured glasses still"
           />
-          <Button secondary title="Discard still" icon="trash-outline" onPress={discard} />
+          <Button
+            secondary
+            title="Discard still"
+            icon="trash-outline"
+            onPress={discard}
+          />
         </View>
       ) : null}
       <Body style={s.small}>
-        Developer Mode only: Meta AI → Settings → App Info → tap version 5×.
-        Local testing uses APPLICATION_ID/CLIENT_TOKEN 0 — no Meta developer
-        account required.
+        Developer Mode: Meta AI → Settings → App Info → tap version 7×, toggle
+        off→on. Local testing uses APPLICATION_ID/CLIENT_TOKEN 0 — no Meta
+        developer account required.
       </Body>
     </Card>
   );

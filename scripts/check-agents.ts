@@ -26,7 +26,7 @@ async function main() {
     return;
   }
   const agents = new GeminiAgents(config);
-  // Run the real coordinator, including revision limits and all seven audit
+  // Run the real coordinator, including revision limits and all eight audit
   // checks. The fixture store never connects to Supabase or uses user records.
   const profile = createProfile(
     {

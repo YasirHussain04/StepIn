@@ -1,4 +1,13 @@
 export type Answers = Record<string, number | string | string[]>;
+export type Persona = {
+  summary: string;
+  tone: string[];
+  pacing: "slow" | "medium";
+  do: string[];
+  dont: string[];
+  exampleVoice: string;
+  source: "conversation_v1";
+};
 export type Profile = {
   id: string;
   revision: number;
@@ -8,6 +17,7 @@ export type Profile = {
   completedAt: string;
   questionnaireVersion: "1";
   scoringVersion: "1";
+  persona?: Persona;
 };
 export type Audit = {
   source: "fixture" | "live";

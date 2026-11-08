@@ -9,6 +9,18 @@ export const Id = z
 export const AnswersSchema = z
   .record(z.string(), z.union([z.number(), z.string(), z.array(z.string())]))
   .refine(validateAnswers, "Exactly ten valid screening answers are required");
+export const PersonaSchema = z
+  .object({
+    summary: z.string().trim().min(1).max(600),
+    tone: z.array(z.string().trim().min(1).max(40)).max(6),
+    pacing: z.enum(["slow", "medium"]),
+    do: z.array(z.string().trim().min(1).max(120)).max(6),
+    dont: z.array(z.string().trim().min(1).max(120)).max(6),
+    exampleVoice: z.string().trim().min(1).max(300),
+    source: z.literal("conversation_v1"),
+  })
+  .strict();
+export type Persona = z.infer<typeof PersonaSchema>;
 export const ProfileSchema = z
   .object({
     id: Id,
@@ -19,6 +31,7 @@ export const ProfileSchema = z
     completedAt: z.iso.datetime(),
     questionnaireVersion: z.literal("1"),
     scoringVersion: z.literal("1"),
+    persona: PersonaSchema.optional(),
   })
   .strict()
   .refine(
@@ -162,9 +175,10 @@ export const ReviewSchema = z
           "accessible_wording",
           "immediate_request",
           "no_inference",
+          "persona_fit",
         ]),
       )
-      .length(7),
+      .length(8),
     changes: z.array(z.string().max(300)).max(5),
     clarificationQuestion: z.string().max(300).nullable(),
   })
@@ -179,6 +193,15 @@ export const SceneSummarySchema = z
     readableSigns: z.array(z.string().min(1).max(200)).max(6),
     uncertainties: z.array(z.string().min(1).max(300)).max(6),
     needsClarification: z.boolean(),
+    eventKind: z.string().trim().min(1).max(80),
+    socialSetup: z.enum([
+      "one_to_one_possible",
+      "small_group",
+      "large_group",
+      "structured_activity",
+      "unclear",
+    ]),
+    coachingFocus: z.array(z.string().trim().min(1).max(200)).max(3),
     model: z.string().max(80),
     provenance: z.literal("meta_glasses"),
   })
@@ -190,6 +213,35 @@ export const SceneResponseSchema = z
   })
   .strict();
 export type SceneResponse = z.infer<typeof SceneResponseSchema>;
+export const QuizChatMessageSchema = z
+  .object({
+    role: z.enum(["assistant", "user"]),
+    text: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+export const QuizTurnRequestSchema = z
+  .object({
+    messages: z.array(QuizChatMessageSchema).max(24),
+    processingConsent: z.literal(true),
+    processingProvider: z.literal("gemini"),
+  })
+  .strict();
+export type QuizTurnRequest = z.infer<typeof QuizTurnRequestSchema>;
+export const QuizTurnResponseSchema = z
+  .object({
+    assistantMessage: z.string().min(1).max(800),
+    complete: z.boolean(),
+    answers: AnswersSchema.optional(),
+    persona: PersonaSchema.optional(),
+    confirmSummary: z.string().max(600).optional(),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      !v.complete || (!!v.answers && !!v.persona && !!v.confirmSummary),
+    "Complete quiz turns require answers, persona, and confirmSummary",
+  );
+export type QuizTurnResponse = z.infer<typeof QuizTurnResponseSchema>;
 export const CoachRequestSchema = z
   .object({
     requestId: Id,

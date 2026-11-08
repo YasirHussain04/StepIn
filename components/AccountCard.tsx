@@ -71,6 +71,23 @@ export function AccountCard() {
         When off, agents get generic context without quiz answers. Screening
         gates still apply on device.
       </Body>
+      <View style={s.between}>
+        <Body style={{ flex: 1 }}>Allow voice capture</Body>
+        <Switch
+          accessibilityLabel="Allow voice capture"
+          value={!!state.settings.voiceConsent}
+          onValueChange={(v) =>
+            setState((prev) => ({
+              ...prev,
+              settings: { ...prev.settings, voiceConsent: v },
+            }))
+          }
+          trackColor={{ true: C.green }}
+        />
+      </View>
+      <Body style={s.small}>
+        Needed for Live talk on Meta glasses and optional clip transcription.
+      </Body>
       <Button
         title={
           state.settings.mode === "live"
@@ -133,11 +150,13 @@ export function AccountCard() {
               coaching: boolean;
               transcription: boolean;
               scene?: boolean;
+              live?: boolean;
+              quiz?: boolean;
             };
           }>("/health", { public: true, url: state.settings.apiUrl })
             .then((health) => {
               setNotice(
-                `Server reachable. Coaching ${health.capabilities.coaching ? "ready" : "needs GEMINI_API_KEY"}; transcription ${health.capabilities.transcription ? "ready" : "needs key"}; scene ${health.capabilities.scene ? "ready" : "needs key"}.`,
+                `Server reachable. Coaching ${health.capabilities.coaching ? "ready" : "needs GEMINI_API_KEY"}; quiz ${health.capabilities.quiz ? "ready" : "needs key"}; spoken/live ${health.capabilities.live ? "ready" : "needs key"}; scene ${health.capabilities.scene ? "ready" : "needs key"}.`,
               );
             })
             .catch((e) => {
