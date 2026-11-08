@@ -1,0 +1,53 @@
+# Two services from this repository. Supply values in Render, never in Git.
+# See DEPLOYMENT.md for the order of setup and URL configuration.
+services:
+  - type: web
+    name: stepin-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev
+    startCommand: npm run backend
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CONVERSATION_MODEL
+        value: gemini-3.8-flash
+      - key: AUDIT_MODEL
+        value: gemini-3.8-flash
+      - key: TRANSCRIPTION_MODEL
+        value: gemini-3.8-flash
+      - key: CORS_ORIGINS
+        sync: false
+  - type: web
+    name: stepin-demo
+    runtime: static
+    buildCommand: npm ci --include=dev && npm run export:web
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: EXPO_PUBLIC_API_URL
+        sync: false
+      - key: EXPO_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: EXPO_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: EXPO_PUBLIC_AUTH_REDIRECT_URL
+        sync: false

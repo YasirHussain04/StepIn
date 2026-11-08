@@ -13,6 +13,7 @@
     "export:web": "node scripts/run.cjs expo export --platform web",
     "format": "prettier --write app components src shared server tests scripts README.md VERIFICATION.md app.json package.json tsconfig.json",
     "server": "node scripts/run.cjs tsx server/index.ts",
+    "backend": "node scripts/run.cjs tsx server/index.ts",
     "server:watch": "node scripts/run.cjs tsx watch server/index.ts",
     "check:backend": "node scripts/run.cjs tsx scripts/check-backend.ts",
     "check:agents": "node scripts/run.cjs tsx scripts/check-agents.ts"

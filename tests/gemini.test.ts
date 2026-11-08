@@ -137,6 +137,12 @@ describe("two Gemini coaching agents", () => {
     expect(bodies[1].generationConfig.responseJsonSchema.required).toContain(
       "checks",
     );
+    expect(
+      bodies[1].generationConfig.responseJsonSchema.properties.checks.minItems,
+    ).toBe(7);
+    expect(
+      bodies[1].generationConfig.responseJsonSchema.properties.checks.maxItems,
+    ).toBe(7);
   });
   it("passes the rejected candidate and review feedback only to the revision call", async () => {
     const { agents, generateContent } = stub(result(draft));

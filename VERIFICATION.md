@@ -31,7 +31,9 @@ The local ignored `.env` was created from the template and its AI model settings
 
 Real Supabase email registration, confirmation, password recovery, JWT verification, account sync, multi-device conflicts and account deletion have **not** been exercised against the user's hosted project. Both coaching roles now use Gemini; the earlier provider adapter and dependency have been removed.
 
-The real Gemini model-list request succeeded using the configured local key. Generation with `gemini-flash-latest` returned HTTP 404. The listed explicit `gemini-3.8-flash` returned HTTP 503 on two attempts, so live suggestion/audit completion is **not verified**. A diagnostic request with listed `gemini-2.5-flash` also returned HTTP 404. Defaults and the local alias configuration are pinned to `gemini-3.8-flash`, with no runtime fallback. Only fictional context was sent; no account profiles or chat history were used. Audio transcription has not been exercised. Retry `npm run check:agents` when Google generation is available.
+The real Gemini model-list request succeeded using the configured local key. Earlier generation checks returned HTTP 404 for `gemini-flash-latest`, HTTP 503 for `gemini-3.8-flash`, and HTTP 404 for `gemini-2.5-flash`. A later `gemini-3.8-flash` check reached both agents but its audit omitted required checks; the server approval gate would reject that incomplete review. The review schema and prompt now require all seven checks on every decision.
+
+The final `npm run check:agents` **passed the full real coordinator**: approved, one attempt, seven audit checks, with `gemini-3.8-flash` for both roles. Only fictional room context and an in-memory screening fixture were used; no account profiles, chat history or database rows were read or written. This verifies provider calls and the approval gate, not the authenticated app/cloud-persistence flow. Audio transcription has not been exercised. There is no runtime model fallback.
 
 Before a live demo, create a disposable test account through the app and verify: email redirect/recovery; explicit sync consent; initial profile upload; one live audited turn; retry; profile retake on another device; conflict choices; deletion propagation; sign-out cache clearing; history-off behavior; and account deletion.
 
@@ -39,6 +41,8 @@ Before a live demo, create a disposable test account through the app and verify:
 
 No physical Android/iOS phone was available. Verify Expo Go SDK compatibility, microphone permission denial/grant, actual 45-second recording/preview/transcription, transcript edits, interruption/background cleanup, SQLite persistence/deletions, SecureStore recovery, manual TTS and Bluetooth routing, keyboard avoidance, safe areas, large fonts and VoiceOver/TalkBack on the presentation phone.
 
-The backend has not been deployed. Production HTTPS, CORS, email delivery, hosting secrets, monitoring and backup retention need configuration. Cancellation/session locks, rate limits, temporary conversations and the event cache currently assume one server process.
+The backend has not been deployed. `render.yaml` and `DEPLOYMENT.md` provide API/static-site configuration and setup steps. Production HTTPS, CORS, email delivery, hosting secrets, monitoring and backup retention need configuration. Cancellation/session locks, rate limits, temporary conversations and the event cache currently assume one server process.
+
+The Render template passed validation against Render's official JSON schema. No Render resources were created and no repository changes were pushed during this setup.
 
 No Meta glasses discovery, native bridge, camera sweep, scene analysis or verified glasses audio routing is implemented. The app does not import a phone camera or image-picker fallback.

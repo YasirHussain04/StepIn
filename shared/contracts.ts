@@ -164,8 +164,7 @@ export const ReviewSchema = z
           "no_inference",
         ]),
       )
-      .min(1)
-      .max(7),
+      .length(7),
     changes: z.array(z.string().max(300)).max(5),
     clarificationQuestion: z.string().max(300).nullable(),
   })
